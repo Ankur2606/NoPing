@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/lib/authContext";
+import { useAuth } from "@/hooks/use-auth";
 
 export function WelcomeCard() {
   const { currentUser } = useAuth();

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Inbox, Calendar, Check, Settings, Home, LogOut } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/authContext";
+import { useAuth } from "@/hooks/use-auth";
 import { auth } from "@/lib/firebase";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 

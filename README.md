@@ -1,73 +1,147 @@
-# Welcome to your Lovable project
+# FlowSync - Client Server Integration
 
-## Project info
+## Overview
 
-**URL**: https://lovable.dev/projects/a9a5003f-f38e-4706-b949-3536bc43f41b
+FlowSync is a full-stack application that helps users manage and synchronize messages and tasks from various services. The application consists of:
 
-## How can I edit this code?
+- **Client**: React/TypeScript frontend built with Vite
+- **Server**: Express.js backend with Firebase integration
 
-There are several ways of editing your application.
+## Setup Instructions
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a9a5003f-f38e-4706-b949-3536bc43f41b) and start prompting.
+- Node.js (v16 or later)
+- Firebase account with a project set up
+- FirebaseAdmin SDK service account key
 
-Changes made via Lovable will be committed automatically to this repo.
+### Server Setup
 
-**Use your preferred IDE**
+1. Navigate to the server directory:
+```
+cd server
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. Install dependencies:
+```
+npm install
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+3. Create a `.env` file in the server directory based on `.env.example`:
+```
+# Server Configuration
+PORT=3000
+NODE_ENV=development
 
-Follow these steps:
+# Firebase Configuration
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_CLIENT_EMAIL=your_client_email
+FIREBASE_PRIVATE_KEY="your_private_key_with_quotes"
+FIREBASE_DATABASE_URL=https://your_project_id.firebaseio.com
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# JWT Secret (if needed beyond Firebase)
+JWT_SECRET=your_jwt_secret_key_here
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+4. Place your Firebase service account key at `server/config/serviceAccountKey.json`
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+5. Start the server:
+```
+npm start
+```
+
+### Client Setup
+
+1. Navigate to the client directory:
+```
+cd client
+```
+
+2. Install dependencies:
+```
+npm install
+```
+
+3. Create a `.env` file in the client directory based on `.env.example`:
+```
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=your_api_key_here
+VITE_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+
+# API Configuration
+VITE_API_BASE_URL=http://localhost:3000/api
+```
+
+4. Start the client:
+```
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Architecture
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Client-Server Communication
 
-**Use GitHub Codespaces**
+The client and server are connected through a RESTful API:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. **Authentication Flow**:
+   - Client uses Firebase SDK for authentication
+   - Server verifies Firebase tokens on protected endpoints
+   - After successful authentication, client obtains user profile from server
 
-## What technologies are used for this project?
+2. **API Communication**:
+   - Client includes Firebase auth token in API requests
+   - Server validates tokens and associates requests with users
+   - All API requests exchange JSON data
 
-This project is built with:
+### Server API Endpoints
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+#### Authentication
+- `POST /api/auth/register` - Register a new user
+- `POST /api/auth/login` - Login existing user
+- `POST /api/auth/google-signin` - Sign in with Google
+- `POST /api/auth/logout` - Logout current user
+- `POST /api/auth/create-profile` - Create or update user profile after authentication
 
-## How can I deploy this project?
+#### User Endpoints
+- `GET /api/user/profile` - Get user profile data
+- `PUT /api/user/profile` - Update user profile
+- `GET /api/user/preferences` - Get user preferences
+- `PUT /api/user/preferences` - Update user preferences
 
-Simply open [Lovable](https://lovable.dev/projects/a9a5003f-f38e-4706-b949-3536bc43f41b) and click on Share -> Publish.
+#### Messages Endpoints
+- `GET /api/messages` - Get all user messages
+- `GET /api/messages/:id` - Get a specific message
+- `POST /api/messages` - Create a new message
 
-## Can I connect a custom domain to my Lovable project?
+#### Tasks Endpoints
+- `GET /api/tasks` - Get all user tasks
+- `GET /api/tasks/:id` - Get a specific task
+- `POST /api/tasks` - Create a new task
+- `PUT /api/tasks/:id` - Update a task
+- `DELETE /api/tasks/:id` - Delete a task
 
-Yes, you can!
+#### Service Endpoints
+- `GET /api/services` - Get all service connections
+- `GET /api/services/status` - Get service status
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Security Considerations
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+1. **Authentication**: Firebase Auth tokens are used for secure authentication
+2. **CORS**: Configured to only allow requests from specified origins
+3. **Environment Variables**: Sensitive data is stored in environment variables
+4. **Error Handling**: Proper error handling to avoid leaking sensitive information
+
+## Development Guidelines
+
+1. **TypeScript**: Use strong typing whenever possible in the client
+2. **Error Handling**: Always handle errors gracefully on both server and client
+3. **Token Management**: Keep Firebase tokens secure and refresh as needed
+4. **API Service Layer**: All API calls should go through the API service layer
+5. **Environment Configuration**: Never commit actual `.env` files to version control

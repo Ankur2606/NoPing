@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/lib/authContext";
+import { useAuth } from "@/hooks/use-auth";
 import { auth } from "@/lib/firebase";
 
 interface HeaderProps {

@@ -1,13 +1,15 @@
-
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockAllMessages, mockEmails, mockSlackMessages, mockTeamsMessages } from "@/services/mockData";
 import { Message } from "@/services/types";
-import { Check, Clock, InboxIcon, RefreshCw, Settings, Star } from "lucide-react";
+import { Check, Clock, InboxIcon, RefreshCw, Settings, Star, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { messagesApi } from "@/services/api";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { useSearchParams } from 'react-router-dom';
 
 // Helper function to format dates
 const formatDate = (dateString: string) => {
@@ -56,40 +58,162 @@ const getPriorityInfo = (priority: string | undefined) => {
 };
 
 const Inbox = () => {
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
   const [activeTab, setActiveTab] = useState("all");
-  const [messages, setMessages] = useState<Message[]>(mockAllMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalMessages, setTotalMessages] = useState(0);
+
+  // Load messages from API
+  const fetchMessages = useCallback(async (type: string = 'all') => {
+    if (!currentUser) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const params: {
+        type?: string;
+        limit?: number;
+        offset?: number;
+      } = {
+        limit: 50  // Fetch more messages initially
+      };
+      
+      // If not fetching all messages, add type filter
+      if (type !== 'all') {
+        params.type = type;
+      }
+      
+      const response = await messagesApi.getMessages(params);
+      
+      setMessages(response.messages || []);
+      setTotalMessages(response.total || 0);
+      
+      // Check for message ID in URL search params and select that message if present
+      const messageId = searchParams.get('message');
+      if (messageId) {
+        const selectedMsg = response.messages.find(msg => msg.id === messageId);
+        if (selectedMsg) {
+          setSelectedMessage(selectedMsg);
+          
+          // Mark as read if not already read
+          if (!selectedMsg.read) {
+            await messagesApi.markAsRead(messageId, true);
+          }
+        }
+      }
+      
+    } catch (err) {
+      console.error("Error fetching messages:", err);
+      setError("Failed to load messages");
+      toast({
+        title: "Error",
+        description: "Failed to load messages. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser, searchParams, toast]);
+
+  // Initial load
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+    setSelectedMessage(null);
     
-    switch (value) {
-      case "email":
-        setMessages(mockEmails);
-        break;
-      case "slack":
-        setMessages(mockSlackMessages);
-        break;
-      case "teams":
-        setMessages(mockTeamsMessages);
-        break;
-      default:
-        setMessages(mockAllMessages);
+    // Update search params to remove message ID when switching tabs
+    if (searchParams.has('message')) {
+      searchParams.delete('message');
+      setSearchParams(searchParams);
     }
     
-    setSelectedMessage(null);
+    // Fetch messages for the selected tab
+    fetchMessages(value === 'all' ? undefined : value);
   };
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    fetchMessages(activeTab === 'all' ? undefined : activeTab);
   };
 
-  const handleSelectMessage = (message: Message) => {
+  const handleSelectMessage = async (message: Message) => {
     setSelectedMessage(message);
+    
+    // Update URL to include selected message ID
+    searchParams.set('message', message.id);
+    setSearchParams(searchParams);
+    
+    // Mark as read if not already read
+    if (!message.read) {
+      try {
+        await messagesApi.markAsRead(message.id, true);
+        
+        // Update the local message state to show as read
+        setMessages(prev => prev.map(msg => 
+          msg.id === message.id ? { ...msg, read: true } : msg
+        ));
+      } catch (err) {
+        console.error("Error marking message as read:", err);
+      }
+    }
+  };
+
+  const handleMarkAsRead = async () => {
+    if (!selectedMessage) return;
+    
+    try {
+      await messagesApi.markAsRead(selectedMessage.id, true);
+      
+      // Update local state
+      setSelectedMessage(prev => prev ? { ...prev, read: true } : null);
+      setMessages(prev => prev.map(msg => 
+        msg.id === selectedMessage.id ? { ...msg, read: true } : msg
+      ));
+      
+      toast({
+        title: "Success",
+        description: "Message marked as read"
+      });
+    } catch (err) {
+      console.error("Error marking message as read:", err);
+      toast({
+        title: "Error",
+        description: "Failed to mark message as read",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleConvertToTask = async () => {
+    if (!selectedMessage) return;
+    
+    try {
+      const result = await messagesApi.convertToTask(selectedMessage.id, {
+        priority: selectedMessage.priority === 'critical' ? 'high' : 
+                 selectedMessage.priority === 'action' ? 'medium' : 'low'
+      });
+      
+      toast({
+        title: "Success",
+        description: "Message converted to task successfully"
+      });
+    } catch (err) {
+      console.error("Error converting message to task:", err);
+      toast({
+        title: "Error",
+        description: "Failed to convert message to task",
+        variant: "destructive"
+      });
+    }
   };
 
   const getMessageSender = (message: Message) => {
@@ -117,6 +241,32 @@ const Inbox = () => {
         return "";
     }
   };
+  
+  // Show loading state while initializing
+  if (isLoading && messages.length === 0) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)]">
+          <Loader2 className="h-10 w-10 animate-spin text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">Loading messages...</p>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // Show error state if there was an error
+  if (error && messages.length === 0) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)]">
+          <div className="text-red-500 mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2">Failed to load messages</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button onClick={handleRefresh}>Try Again</Button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -174,47 +324,57 @@ const Inbox = () => {
               <CardHeader className="py-3">
                 <CardTitle className="text-sm font-medium flex justify-between items-center">
                   Messages
-                  <span className="text-xs bg-muted px-2 py-1 rounded-md">{messages.length} total</span>
+                  <span className="text-xs bg-muted px-2 py-1 rounded-md">{totalMessages} total</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0 overflow-auto max-h-[calc(100vh-280px)]">
-                <div className="divide-y">
-                  {messages.map((message) => {
-                    const priorityInfo = getPriorityInfo(message.priority);
-                    const sourceIcon = getSourceIcon(message);
-                    const sender = getMessageSender(message);
-                    const subject = getMessageSubject(message);
-                    
-                    return (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          "p-3 cursor-pointer hover:bg-muted/50 transition-colors",
-                          selectedMessage?.id === message.id && "bg-muted",
-                          !message.read && "border-l-2 border-l-flowsync-purple"
-                        )}
-                        onClick={() => handleSelectMessage(message)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <span>{priorityInfo.icon}</span>
-                            <span>{sourceIcon}</span>
+                {isLoading && messages.length > 0 ? (
+                  <div className="flex justify-center items-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : messages.length > 0 ? (
+                  <div className="divide-y">
+                    {messages.map((message) => {
+                      const priorityInfo = getPriorityInfo(message.priority);
+                      const sourceIcon = getSourceIcon(message);
+                      const sender = getMessageSender(message);
+                      const subject = getMessageSubject(message);
+                      
+                      return (
+                        <div
+                          key={message.id}
+                          className={cn(
+                            "p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                            selectedMessage?.id === message.id && "bg-muted",
+                            !message.read && "border-l-2 border-l-flowsync-purple"
+                          )}
+                          onClick={() => handleSelectMessage(message)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <span>{priorityInfo.icon}</span>
+                              <span>{sourceIcon}</span>
+                            </div>
+                            <span className={cn("font-medium", priorityInfo.className)}>
+                              {sender}
+                            </span>
+                            <span className="ml-auto text-xs text-muted-foreground">
+                              {formatDate(message.timestamp)}
+                            </span>
                           </div>
-                          <span className={cn("font-medium", priorityInfo.className)}>
-                            {sender}
-                          </span>
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {formatDate(message.timestamp)}
-                          </span>
+                          <div className="font-medium text-sm mt-1">{subject}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                            {message.content}
+                          </div>
                         </div>
-                        <div className="font-medium text-sm mt-1">{subject}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
-                          {message.content}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No messages found
+                  </div>
+                )}
               </CardContent>
             </Card>
             
@@ -232,7 +392,12 @@ const Inbox = () => {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          disabled={selectedMessage.read}
+                          onClick={handleMarkAsRead}
+                        >
                           <Check className="h-4 w-4 mr-1" />
                           Mark Read
                         </Button>
@@ -287,7 +452,13 @@ const Inbox = () => {
                     
                     <div className="mt-8">
                       <Button>Reply</Button>
-                      <Button variant="outline" className="ml-2">Convert to Task</Button>
+                      <Button 
+                        variant="outline" 
+                        className="ml-2"
+                        onClick={handleConvertToTask}
+                      >
+                        Convert to Task
+                      </Button>
                     </div>
                   </CardContent>
                 </>

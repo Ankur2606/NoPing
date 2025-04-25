@@ -9,22 +9,51 @@ const { db, admin } = require('../config/firebase');
  */
 router.get('/profile', async (req, res) => {
   try {
+    // Log the request user object to help debug
+    console.log('Request user object:', req.user);
+    
+    if (!req.user || !req.user.uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const uid = req.user.uid;
     const userRef = db.collection('users').doc(uid);
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+      console.log(`User document not found for UID: ${uid}`);
+      // Instead of returning 404, let's create a basic profile for this user
+      const basicProfile = {
+        profile: {
+          email: req.user.email || '',
+          displayName: req.user.displayName || '',
+          photoURL: '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      };
+      
+      await userRef.set(basicProfile);
+      
+      return res.status(200).json({
+        uid: uid,
+        email: req.user.email || '',
+        displayName: req.user.displayName || '',
+        photoURL: '',
+        createdAt: new Date().toISOString(),
+        message: 'New profile created'
+      });
     }
 
     const userData = userDoc.data();
     
     return res.status(200).json({
       uid: uid,
-      email: userData.profile.email,
-      displayName: userData.profile.displayName || '',
-      photoURL: userData.profile.photoURL || '',
-      createdAt: userData.profile.createdAt
+      email: userData.profile?.email || req.user.email || '',
+      displayName: userData.profile?.displayName || req.user.displayName || '',
+      photoURL: userData.profile?.photoURL || '',
+      createdAt: userData.profile?.createdAt,
+      preferences: userData.profile?.preferences || {}
     });
   } catch (error) {
     console.error('Error getting user profile:', error);
@@ -39,9 +68,49 @@ router.get('/profile', async (req, res) => {
  */
 router.put('/profile', async (req, res) => {
   try {
+    if (!req.user || !req.user.uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const uid = req.user.uid;
     const { displayName, photoURL } = req.body;
     
+    // Check if the user exists first
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      console.log(`Creating new user profile for UID: ${uid} during profile update`);
+      // Create a basic profile with the provided data
+      const newProfile = {
+        profile: {
+          email: req.user.email || '',
+          displayName: displayName || req.user.displayName || '',
+          photoURL: photoURL || '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      };
+      
+      await userRef.set(newProfile);
+      
+      // Update in Firebase Auth if needed
+      const authUpdates = {};
+      if (displayName) authUpdates.displayName = displayName;
+      if (photoURL) authUpdates.photoURL = photoURL;
+      
+      if (Object.keys(authUpdates).length > 0) {
+        await admin.auth().updateUser(uid, authUpdates);
+      }
+      
+      return res.status(200).json({
+        success: true,
+        message: 'New profile created',
+        error: null
+      });
+    }
+    
+    // For existing users, prepare updates
     const updates = {};
     
     if (displayName !== undefined) {
@@ -59,8 +128,11 @@ router.put('/profile', async (req, res) => {
       });
     }
     
+    // Add updatedAt timestamp
+    updates['profile.updatedAt'] = admin.firestore.FieldValue.serverTimestamp();
+    
     // Update in Firestore
-    await db.collection('users').doc(uid).update(updates);
+    await userRef.update(updates);
     
     // Update in Firebase Auth if needed
     const authUpdates = {};
@@ -91,18 +163,53 @@ router.put('/profile', async (req, res) => {
  */
 router.get('/preferences', async (req, res) => {
   try {
+    if (!req.user || !req.user.uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const uid = req.user.uid;
     const userRef = db.collection('users').doc(uid);
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+      console.log(`User document not found for UID: ${uid} when fetching preferences`);
+      // Create a basic profile with default preferences
+      const defaultPreferences = {
+        workHours: { start: "09:00", end: "17:00" },
+        workDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        timeZone: "UTC",
+        notificationPreferences: {
+          email: true,
+          desktop: true,
+          mobile: false,
+          telegram: false
+        },
+        priorityKeywords: []
+      };
+      
+      const basicProfile = {
+        profile: {
+          email: req.user.email || '',
+          displayName: req.user.displayName || '',
+          photoURL: '',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          preferences: defaultPreferences
+        }
+      };
+      
+      await userRef.set(basicProfile);
+      
+      return res.status(200).json({
+        ...defaultPreferences,
+        message: 'Default preferences created'
+      });
     }
 
     const userData = userDoc.data();
     
-    // Return preferences or default values if not set
-    const preferences = userData.preferences || {
+    // Access preferences from either the profile object or directly from userData
+    const preferences = (userData.profile?.preferences || userData.preferences) || {
       workHours: { start: "09:00", end: "17:00" },
       workDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
       timeZone: "UTC",
@@ -129,11 +236,65 @@ router.get('/preferences', async (req, res) => {
  */
 router.put('/preferences', async (req, res) => {
   try {
+    if (!req.user || !req.user.uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const uid = req.user.uid;
     const { workHours, workDays, timeZone, notificationPreferences, priorityKeywords } = req.body;
     
+    // Check if the user profile exists
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      console.log(`Creating new user profile for UID: ${uid} during preferences update`);
+      // Create a basic profile with the provided preferences
+      const newPreferences = {};
+      if (workHours) newPreferences.workHours = workHours;
+      if (workDays) newPreferences.workDays = workDays;
+      if (timeZone) newPreferences.timeZone = timeZone;
+      if (notificationPreferences) newPreferences.notificationPreferences = notificationPreferences;
+      if (priorityKeywords) newPreferences.priorityKeywords = priorityKeywords;
+      
+      // Fill in any missing preferences with defaults
+      const fullPreferences = {
+        workHours: newPreferences.workHours || { start: "09:00", end: "17:00" },
+        workDays: newPreferences.workDays || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        timeZone: newPreferences.timeZone || "UTC",
+        notificationPreferences: newPreferences.notificationPreferences || {
+          email: true,
+          desktop: true,
+          mobile: false,
+          telegram: false
+        },
+        priorityKeywords: newPreferences.priorityKeywords || []
+      };
+      
+      // Create a new user profile
+      await userRef.set({
+        profile: {
+          email: req.user.email || '',
+          displayName: req.user.displayName || '',
+          photoURL: '',
+          preferences: fullPreferences,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: 'New profile created with preferences',
+        error: null
+      });
+    }
+    
+    // For existing users, prepare updates
+    const userData = userDoc.data();
+    const preferencesPath = userData.profile?.preferences ? 'profile.preferences' : 'preferences';
+    
     const updates = {};
-    const preferencesPath = 'preferences';
     
     if (workHours) {
       updates[`${preferencesPath}.workHours`] = workHours;
@@ -155,8 +316,18 @@ router.put('/preferences', async (req, res) => {
       updates[`${preferencesPath}.priorityKeywords`] = priorityKeywords;
     }
     
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'No valid update fields provided' 
+      });
+    }
+    
+    // Add updatedAt timestamp
+    updates['profile.updatedAt'] = admin.firestore.FieldValue.serverTimestamp();
+    
     // Update in Firestore
-    await db.collection('users').doc(uid).update(updates);
+    await userRef.update(updates);
     
     return res.status(200).json({
       success: true,

@@ -13,43 +13,83 @@ router.get('/', async (req, res) => {
     const uid = req.user.uid;
     const { type, read, priority, limit = 10, offset = 0 } = req.query;
     
+    console.log('GET /api/messages - Request parameters:', { 
+      uid, type, read, priority, limit, offset 
+    });
+    
     // Start with base query for user's messages
     let query = db.collection('messages')
       .doc(uid)
       .collection('userMessages')
       .orderBy('timestamp', 'desc');
     
+    console.log(`Querying messages for user: ${uid}`);
+    
     // Apply filters if provided
     if (type && type !== 'all') {
       query = query.where('type', '==', type);
+      console.log(`Added type filter: ${type}`);
     }
     
     if (read && read !== 'all') {
-      query = query.where('read', '==', read === 'true');
+      const readBoolean = read === 'true';
+      query = query.where('read', '==', readBoolean);
+      console.log(`Added read filter: ${readBoolean}`);
     }
     
+    // Handle priority filter
     if (priority && priority !== 'all') {
-      query = query.where('priority', '==', priority);
+      // Check if priority contains comma-separated values
+      if (priority.includes(',')) {
+        console.log(`Multiple priorities detected: ${priority}`);
+        // Cannot use multiple "where" clauses on the same field directly with Firestore
+        // Instead, we'll fetch all messages and filter in memory
+        const priorityValues = priority.split(',');
+        console.log(`Will filter for priorities: ${JSON.stringify(priorityValues)}`);
+        
+        // Remove the priority filter from the query, we'll filter after fetching
+        // Continue with other filters
+      } else {
+        // Single priority - can use direct where clause
+        query = query.where('priority', '==', priority);
+        console.log(`Added single priority filter: ${priority}`);
+      }
     }
     
-    // Get total count (for pagination)
-    const countSnapshot = await query.count().get();
-    const total = countSnapshot.data().count;
+    // Log the final query (this is approximate since we can't log the actual Firestore query object)
+    console.log('Query constructed with filters applied');
     
-    // Apply pagination
-    query = query.limit(parseInt(limit)).offset(parseInt(offset));
-    
-    // Execute query
+    // Execute query to get all matching documents
     const messagesSnapshot = await query.get();
+    console.log(`Total documents fetched: ${messagesSnapshot.size}`);
     
-    // Process results
-    const messages = [];
+    // Process results and apply in-memory filtering if needed
+    let messages = [];
     messagesSnapshot.forEach(doc => {
       messages.push({
         id: doc.id,
         ...doc.data()
       });
     });
+    
+    // If we have multiple priority values, filter in memory
+    if (priority && priority !== 'all' && priority.includes(',')) {
+      const priorityValues = priority.split(',');
+      console.log(`Filtering ${messages.length} messages for priorities: ${priorityValues}`);
+      
+      messages = messages.filter(message => 
+        priorityValues.includes(message.priority)
+      );
+      
+      console.log(`After priority filtering: ${messages.length} messages remain`);
+    }
+    
+    // Calculate total for pagination (after in-memory filtering)
+    const total = messages.length;
+    
+    // Apply pagination in memory
+    messages = messages.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+    console.log(`After pagination: ${messages.length} messages to return`);
     
     return res.status(200).json({
       messages,

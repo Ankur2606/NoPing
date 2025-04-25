@@ -5,6 +5,7 @@ import { PriorityMessages } from "@/components/dashboard/PriorityMessages";
 import { TasksDueToday } from "@/components/dashboard/TasksDueToday";
 import { ServiceStatus } from "@/components/dashboard/ServiceStatus";
 import { AudioBriefingControl } from "@/components/dashboard/AudioBriefingControl";
+import MessagesDataLoader from "@/components/dashboard/MessagesDataLoader";
 import { Bell, Calendar, CheckCircle, Inbox } from "lucide-react";
 
 const Dashboard = () => {
@@ -46,6 +47,11 @@ const Dashboard = () => {
             <TasksDueToday />
             <ServiceStatus />
           </div>
+        </div>
+        
+        {/* Demo component for client-server integration */}
+        <div className="mt-6">
+          <MessagesDataLoader />
         </div>
       </div>
     </Layout>
