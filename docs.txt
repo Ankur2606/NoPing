@@ -1,0 +1,516 @@
+# FlowSync Project Documentation
+
+## Project Overview
+FlowSync is a communication and task management dashboard application that integrates various communication services (email, Slack, Microsoft Teams) and task management tools into a unified interface. The application helps users manage and prioritize their communications and tasks across different platforms.
+
+## Firebase Configuration
+The project uses Firebase for authentication and data storage. Firebase services include:
+- Authentication
+- Firestore Database
+- Cloud Functions (potential/future implementation)
+
+## API Routes Structure
+
+### Authentication API
+- **POST /api/auth/register**
+  - Description: Register a new user
+  - Input:
+    ```json
+    {
+      "email": "string",
+      "password": "string",
+      "displayName": "string (optional)"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "user": {
+        "uid": "string",
+        "email": "string",
+        "displayName": "string"
+      },
+      "error": "null | error message"
+    }
+    ```
+
+- **POST /api/auth/login**
+  - Description: Login existing user
+  - Input:
+    ```json
+    {
+      "email": "string",
+      "password": "string"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "user": {
+        "uid": "string",
+        "email": "string",
+        "displayName": "string"
+      },
+      "error": "null | error message"
+    }
+    ```
+
+- **POST /api/auth/google-signin**
+  - Description: Sign in with Google
+  - Input: None (handled through Google OAuth flow)
+  - Response:
+    ```json
+    {
+      "user": {
+        "uid": "string",
+        "email": "string",
+        "displayName": "string",
+        "photoURL": "string"
+      },
+      "error": "null | error message"
+    }
+    ```
+
+- **POST /api/auth/logout**
+  - Description: Logout current user
+  - Input: None
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+### User API
+- **GET /api/user/profile**
+  - Description: Get user profile data
+  - Input: None (Authentication required)
+  - Response:
+    ```json
+    {
+      "uid": "string",
+      "email": "string",
+      "displayName": "string",
+      "photoURL": "string",
+      "createdAt": "timestamp"
+    }
+    ```
+
+- **PUT /api/user/profile**
+  - Description: Update user profile
+  - Input:
+    ```json
+    {
+      "displayName": "string (optional)",
+      "photoURL": "string (optional)"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+- **GET /api/user/preferences**
+  - Description: Get user preferences
+  - Input: None (Authentication required)
+  - Response:
+    ```json
+    {
+      "workHours": {
+        "start": "string (time format)",
+        "end": "string (time format)"
+      },
+      "workDays": ["string (day names)"],
+      "timeZone": "string",
+      "notificationPreferences": {
+        "email": "boolean",
+        "desktop": "boolean",
+        "mobile": "boolean",
+        "telegram": "boolean"
+      },
+      "priorityKeywords": ["string"]
+    }
+    ```
+
+- **PUT /api/user/preferences**
+  - Description: Update user preferences
+  - Input: Same structure as GET response
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+### Messages API
+- **GET /api/messages**
+  - Description: Get all messages
+  - Input: 
+    - Query parameters:
+      - `type`: "email" | "slack" | "teams" | "all"
+      - `read`: "true" | "false" | "all"
+      - `priority`: "critical" | "action" | "info" | "all"
+      - `limit`: number
+      - `offset`: number
+  - Response:
+    ```json
+    {
+      "messages": [
+        {
+          "id": "string",
+          "type": "email | slack | teams",
+          "content": "string",
+          "timestamp": "timestamp",
+          "priority": "critical | action | info",
+          "read": "boolean",
+          "source-specific-fields": "..."
+        }
+      ],
+      "total": "number",
+      "hasMore": "boolean"
+    }
+    ```
+
+- **GET /api/messages/:id**
+  - Description: Get single message by ID
+  - Input: None
+  - Response: Single message object
+
+- **PUT /api/messages/:id/read**
+  - Description: Mark message as read/unread
+  - Input:
+    ```json
+    {
+      "read": "boolean"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+- **POST /api/messages/:id/convert-to-task**
+  - Description: Convert a message to a task
+  - Input:
+    ```json
+    {
+      "title": "string (optional, default: message subject)",
+      "dueDate": "timestamp (optional)",
+      "priority": "high | medium | low (optional)",
+      "tags": ["string (optional)"]
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "task": {
+        "id": "string",
+        "title": "string",
+        "description": "string",
+        "dueDate": "timestamp",
+        "createdOn": "timestamp",
+        "priority": "high | medium | low",
+        "completed": "boolean",
+        "source": "email | slack | teams | manual",
+        "sourceMessageId": "string",
+        "tags": ["string"]
+      },
+      "error": "null | error message"
+    }
+    ```
+
+### Tasks API
+- **GET /api/tasks**
+  - Description: Get all tasks
+  - Input: 
+    - Query parameters:
+      - `completed`: "true" | "false" | "all"
+      - `priority`: "high" | "medium" | "low" | "all"
+      - `dueDate`: "today" | "tomorrow" | "week" | "all"
+      - `limit`: number
+      - `offset`: number
+  - Response:
+    ```json
+    {
+      "tasks": [
+        {
+          "id": "string",
+          "title": "string",
+          "description": "string",
+          "dueDate": "timestamp",
+          "createdOn": "timestamp",
+          "priority": "high | medium | low",
+          "completed": "boolean",
+          "source": "email | slack | teams | manual",
+          "sourceMessageId": "string",
+          "tags": ["string"]
+        }
+      ],
+      "total": "number",
+      "hasMore": "boolean"
+    }
+    ```
+
+- **GET /api/tasks/:id**
+  - Description: Get single task by ID
+  - Input: None
+  - Response: Single task object
+
+- **POST /api/tasks**
+  - Description: Create new task
+  - Input:
+    ```json
+    {
+      "title": "string",
+      "description": "string (optional)",
+      "dueDate": "timestamp (optional)",
+      "priority": "high | medium | low",
+      "tags": ["string (optional)"],
+      "assignedTo": ["string (optional)"]
+    }
+    ```
+  - Response: Created task object
+
+- **PUT /api/tasks/:id**
+  - Description: Update task
+  - Input: Task fields to update
+  - Response: Updated task object
+
+- **PUT /api/tasks/:id/complete**
+  - Description: Toggle task complete status
+  - Input:
+    ```json
+    {
+      "completed": "boolean"
+    }
+    ```
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+- **DELETE /api/tasks/:id**
+  - Description: Delete task
+  - Input: None
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+### Services API
+- **GET /api/services**
+  - Description: Get all connected services
+  - Input: None
+  - Response:
+    ```json
+    {
+      "services": [
+        {
+          "id": "string",
+          "type": "email | slack | teams | task",
+          "name": "string",
+          "isConnected": "boolean",
+          "lastSynced": "timestamp",
+          "errorMessage": "string"
+        }
+      ]
+    }
+    ```
+
+- **POST /api/services/connect/:type**
+  - Description: Connect a new service
+  - Input: Service-specific authentication data
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "service": {
+        "id": "string",
+        "type": "email | slack | teams | task",
+        "name": "string",
+        "isConnected": "boolean"
+      },
+      "error": "null | error message"
+    }
+    ```
+
+- **DELETE /api/services/:id**
+  - Description: Disconnect a service
+  - Input: None
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "error": "null | error message"
+    }
+    ```
+
+- **POST /api/services/:id/sync**
+  - Description: Manually sync a service
+  - Input: None
+  - Response:
+    ```json
+    {
+      "success": "boolean",
+      "lastSynced": "timestamp",
+      "error": "null | error message"
+    }
+    ```
+
+## Firebase Database Collections Structure
+
+### Users Collection
+```
+users/
+  └── {userId}/
+      ├── profile/
+      │   ├── email: string
+      │   ├── displayName: string
+      │   ├── photoURL: string
+      │   └── createdAt: timestamp
+      ├── preferences/
+      │   ├── workHours/
+      │   │   ├── start: string
+      │   │   └── end: string
+      │   ├── workDays: array<string>
+      │   ├── timeZone: string
+      │   ├── notificationPreferences/
+      │   │   ├── email: boolean
+      │   │   ├── desktop: boolean
+      │   │   ├── mobile: boolean
+      │   │   └── telegram: boolean
+      │   └── priorityKeywords: array<string>
+      └── analytics/
+          ├── lastLogin: timestamp
+          ├── loginCount: number
+          └── deviceInfo: map<string, any>
+```
+
+### Messages Collection
+```
+messages/
+  └── {userId}/
+      └── {messageId}/
+          ├── type: "email" | "slack" | "teams"
+          ├── content: string
+          ├── timestamp: timestamp
+          ├── priority: "critical" | "action" | "info"
+          ├── read: boolean
+          ├── sourceId: string
+          ├── // Email-specific fields
+          │   ├── from/
+          │   │   ├── name: string
+          │   │   └── email: string
+          │   ├── to: array<string>
+          │   ├── subject: string
+          │   └── attachments: array<map>
+          ├── // Slack-specific fields
+          │   ├── channel: string
+          │   ├── sender/
+          │   │   ├── name: string
+          │   │   └── avatar: string
+          │   ├── mentions: boolean
+          │   └── reactions: array<map>
+          └── // Teams-specific fields
+              ├── channel: string
+              ├── sender/
+              │   ├── name: string
+              │   └── email: string
+              └── mentions: boolean
+```
+
+### Tasks Collection
+```
+tasks/
+  └── {userId}/
+      └── {taskId}/
+          ├── title: string
+          ├── description: string
+          ├── dueDate: timestamp
+          ├── createdOn: timestamp
+          ├── priority: "high" | "medium" | "low"
+          ├── completed: boolean
+          ├── source: "email" | "slack" | "teams" | "manual"
+          ├── sourceMessageId: string
+          ├── tags: array<string>
+          └── assignedTo: array<string>
+```
+
+### Services Collection
+```
+services/
+  └── {userId}/
+      └── {serviceId}/
+          ├── type: "email" | "slack" | "teams" | "task"
+          ├── name: string
+          ├── isConnected: boolean
+          ├── lastSynced: timestamp
+          ├── errorMessage: string
+          └── authData/
+              ├── // Service-specific auth data
+              ├── tokens/
+              │   ├── accessToken: string
+              │   └── refreshToken: string
+              ├── expiresAt: timestamp
+              └── scopes: array<string>
+```
+
+### Notifications Collection
+```
+notifications/
+  └── {userId}/
+      └── {notificationId}/
+          ├── type: "message" | "task" | "system"
+          ├── title: string
+          ├── content: string
+          ├── read: boolean
+          ├── timestamp: timestamp
+          ├── sourceId: string
+          └── sourceType: "message" | "task" | "system"
+```
+
+### Analytics Collection
+```
+analytics/
+  └── {userId}/
+      ├── messageStats/
+      │   ├── totalReceived: number
+      │   ├── totalRead: number
+      │   ├── byPriority/
+      │   │   ├── critical: number
+      │   │   ├── action: number
+      │   │   └── info: number
+      │   └── byType/
+      │       ├── email: number
+      │       ├── slack: number
+      │       └── teams: number
+      └── taskStats/
+          ├── totalCreated: number
+          ├── totalCompleted: number
+          └── byPriority/
+              ├── high: number
+              ├── medium: number
+              └── low: number
+```
+
+## Security Rules
+Firebase security rules should be implemented to ensure:
+1. Users can only access their own data
+2. Field validation for all document writes
+3. Appropriate indexing for efficient querying
+4. Rate limiting for API requests
+5. Authentication rules for service connections
