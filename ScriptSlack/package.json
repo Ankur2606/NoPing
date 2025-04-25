@@ -1,0 +1,14 @@
+{
+  "name": "scriptslack",
+  "version": "1.0.0",
+  "main": "slackClient.js",
+  "scripts": {
+    "start": "node slackClient.js",
+    "setup": "node data/migrations/initialSetup.js"
+  },
+  "dependencies": {
+    "@slack/web-api": "^6.8.1",
+    "dotenv": "^16.0.3",
+    "scriptslack": "file:"
+  }
+}
