@@ -10,7 +10,9 @@ lerna-debug.log*
 .env
 
 server/config/serviceAccountKey.json
-
+scriptEmail/config/serviceAccountKey.json
+scriptEmail/token.json
+scriptEmail/credentials.json
 node_modules
 dist
 dist-ssr
