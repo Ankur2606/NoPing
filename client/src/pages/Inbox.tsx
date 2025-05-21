@@ -57,6 +57,19 @@ const getPriorityInfo = (priority: string | undefined) => {
   }
 };
 
+// Helper function to check if content is HTML
+const isHtmlContent = (content: string): boolean => {
+  return /<[a-z][\s\S]*>/i.test(content);
+};
+
+// Helper function to safely render HTML content
+const renderMessageContent = (content: string) => {
+  if (isHtmlContent(content)) {
+    return <div dangerouslySetInnerHTML={{ __html: content }} />;
+  }
+  return <p>{content}</p>;
+};
+
 const Inbox = () => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
@@ -125,7 +138,7 @@ const Inbox = () => {
   // Initial load
   useEffect(() => {
     fetchMessages();
-  }, [fetchMessages]);
+  }, []);
 
   const handleTabChange = (value: "email" | "slack" | "teams" | "all") => {
     setActiveTab(value);
@@ -270,7 +283,7 @@ const Inbox = () => {
 
   return (
     <Layout>
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Unified Inbox</h1>
           <div className="flex items-center gap-2">
@@ -294,7 +307,7 @@ const Inbox = () => {
           defaultValue="all" 
           value={activeTab}
           onValueChange={handleTabChange}
-          className="space-y-4"
+          className="space-y-2"
         >
           <div className="flex items-center justify-between">
             <TabsList>
@@ -320,14 +333,14 @@ const Inbox = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="col-span-1 md:h-[calc(100vh-220px)] overflow-hidden">
+            <Card className="col-span-1 md:h-[calc(100vh-180px)] overflow-hidden">
               <CardHeader className="py-3">
                 <CardTitle className="text-sm font-medium flex justify-between items-center">
                   Messages
                   <span className="text-xs bg-muted px-2 py-1 rounded-md">{totalMessages} total</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0 overflow-auto max-h-[calc(100vh-280px)]">
+              <CardContent className="p-0 overflow-auto max-h-[calc(100vh-240px)]">
                 {isLoading && messages.length > 0 ? (
                   <div className="flex justify-center items-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -363,9 +376,9 @@ const Inbox = () => {
                             </span>
                           </div>
                           <div className="font-medium text-sm mt-1">{subject}</div>
-                          <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
+                          {/* <div className="text-xs text-muted-foreground line-clamp-1 mt-1">
                             {message.content}
-                          </div>
+                          </div> */}
                         </div>
                       );
                     })}
@@ -378,13 +391,13 @@ const Inbox = () => {
               </CardContent>
             </Card>
             
-            <Card className="col-span-2 md:h-[calc(100vh-220px)] overflow-hidden">
+            <Card className="col-span-2 md:h-[calc(100vh-180px)] overflow-hidden">
               {selectedMessage ? (
                 <>
                   <CardHeader className="py-4 border-b">
                     <div className="flex justify-between items-center">
                       <div>
-                        <CardTitle className="text-xl">
+                        <CardTitle className="text-lg">
                           {getMessageSubject(selectedMessage)}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -414,7 +427,7 @@ const Inbox = () => {
                   </CardHeader>
                   <CardContent className="p-4 overflow-auto max-h-[calc(100vh-330px)]">
                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <p>{selectedMessage.content}</p>
+                      {renderMessageContent(selectedMessage.content)}
                       
                       {selectedMessage.type === "email" && selectedMessage.attachments && (
                         <div className="mt-6 border-t pt-4">
