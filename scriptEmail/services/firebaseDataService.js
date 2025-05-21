@@ -217,7 +217,7 @@ async function writeMessagesToFirebase(userId, messagesData) {
   try {
     const db = getFirestore();
     const batch = db.batch();
-    const messagesRef = db.collection('messages').doc(userId).collection('items');
+    const messagesRef = db.collection('messages').doc(userId).collection('userMessages');
     const docIds = [];
     const validMessages = [];
     

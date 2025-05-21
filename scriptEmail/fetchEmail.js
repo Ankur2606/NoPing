@@ -48,7 +48,7 @@ async function fetchAndProcessEmails() {
     );
     
     // Store processed emails in Firebase using the new data service
-    const userId = process.env.DEFAULT_USER_ID || 'sample-user-123';
+    const userId = process.env.DEFAULT_USER_ID || 'yxVWSVWRaZXJeJHVFpGeqbdKyXk2';
     await writeMessagesToFirebase(userId, processedEmails);
     
     console.log(`Successfully processed ${processedEmails.length} emails`);

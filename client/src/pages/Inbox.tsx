@@ -70,7 +70,7 @@ const Inbox = () => {
   const [totalMessages, setTotalMessages] = useState(0);
 
   // Load messages from API
-  const fetchMessages = useCallback(async (type: string = 'all') => {
+  const fetchMessages = useCallback(async (type: "email" | "slack" | "teams" | "all" = 'all') => {
     if (!currentUser) return;
     
     setIsLoading(true);
@@ -78,7 +78,7 @@ const Inbox = () => {
     
     try {
       const params: {
-        type?: string;
+        type?: "email" | "slack" | "teams" | "all";
         limit?: number;
         offset?: number;
       } = {
@@ -127,7 +127,7 @@ const Inbox = () => {
     fetchMessages();
   }, [fetchMessages]);
 
-  const handleTabChange = (value: string) => {
+  const handleTabChange = (value: "email" | "slack" | "teams" | "all") => {
     setActiveTab(value);
     setSelectedMessage(null);
     
@@ -138,11 +138,11 @@ const Inbox = () => {
     }
     
     // Fetch messages for the selected tab
-    fetchMessages(value === 'all' ? undefined : value);
+    fetchMessages(value);
   };
 
   const handleRefresh = () => {
-    fetchMessages(activeTab === 'all' ? undefined : activeTab);
+    fetchMessages(activeTab as "email" | "slack" | "teams" | "all");
   };
 
   const handleSelectMessage = async (message: Message) => {

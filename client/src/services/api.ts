@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from '../lib/firebase';
 import { Message, Task, ServiceConnection, UserPreferences } from './types';
 
