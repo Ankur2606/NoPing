@@ -12,6 +12,7 @@ import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import AuthSuccess from "./pages/AuthSuccess";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth-success" element={<AuthSuccess />} />
             <Route path="/" element={
               <ProtectedRoute>
                 <Index />

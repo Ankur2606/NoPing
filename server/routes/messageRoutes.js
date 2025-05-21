@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
       .collection('userMessages')
       .orderBy('timestamp', 'desc');
     
-    console.log(`Querying messages for user: ${uid}`);
+    // console.log(`Querying messages for user: ${uid}`);
     
     // Apply filters if provided
     if (type && type !== 'all') {
@@ -57,11 +57,11 @@ router.get('/', async (req, res) => {
     }
     
     // Log the final query (this is approximate since we can't log the actual Firestore query object)
-    console.log('Query constructed with filters applied');
+    // console.log('Query constructed with filters applied');
     
     // Execute query to get all matching documents
     const messagesSnapshot = await query.get();
-    console.log(`Total documents fetched: ${messagesSnapshot.size}`);
+    // console.log(`Total documents fetched: ${messagesSnapshot.size}`);
     
     // Process results and apply in-memory filtering if needed
     let messages = [];
@@ -75,13 +75,13 @@ router.get('/', async (req, res) => {
     // If we have multiple priority values, filter in memory
     if (priority && priority !== 'all' && priority.includes(',')) {
       const priorityValues = priority.split(',');
-      console.log(`Filtering ${messages.length} messages for priorities: ${priorityValues}`);
+      // console.log(`Filtering ${messages.length} messages for priorities: ${priorityValues}`);
       
       messages = messages.filter(message => 
         priorityValues.includes(message.priority)
       );
       
-      console.log(`After priority filtering: ${messages.length} messages remain`);
+      // console.log(`After priority filtering: ${messages.length} messages remain`);
     }
     
     // Calculate total for pagination (after in-memory filtering)
@@ -89,7 +89,7 @@ router.get('/', async (req, res) => {
     
     // Apply pagination in memory
     messages = messages.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
-    console.log(`After pagination: ${messages.length} messages to return`);
+    // console.log(`After pagination: ${messages.length} messages to return`);
     
     return res.status(200).json({
       messages,

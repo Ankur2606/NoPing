@@ -13,10 +13,14 @@
   "license": "ISC",
   "description": "FlowSync backend server with Firebase integration",
   "dependencies": {
+    "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "firebase-admin": "^11.11.0",
+    "googleapis": "^149.0.0",
+    "node-cron": "^4.0.6",
+    "querystring": "^0.2.1",
     "server": "file:"
   },
   "devDependencies": {

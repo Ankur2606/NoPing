@@ -1,6 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const { auth, admin, db } = require('../config/firebase');
+const { saveOAuthToken, getOAuthToken } = require('../models/oauthTokenModel');
+const axios = require('axios');
+const querystring = require('querystring');
+
+// Google OAuth configuration
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/google-callback';
+const GOOGLE_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/userinfo.email', 
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/gmail.readonly'  // For reading emails
+];
 
 // Authentication middleware for routes that need it
 const authenticateUser = async (req, res, next) => {
@@ -193,6 +206,158 @@ router.post('/google-signin', async (req, res) => {
       user: null,
       error: error.message
     });
+  }
+});
+
+/**
+ * @route   GET /api/auth/google-auth-url
+ * @desc    Get Google OAuth URL with requested scopes
+ * @access  Public
+ */
+router.get('/google-auth-url', (req, res) => {
+  // Create a state parameter to verify the callback
+  const state = Math.random().toString(36).substring(2, 15);
+  
+  // Store state in session/cookie for verification later
+  // In a real app, you'd save this in a session or temp storage
+  // For simplicity, we're skipping that here
+  
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${querystring.stringify({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: GOOGLE_OAUTH_SCOPES.join(' '),
+    access_type: 'offline', // Get a refresh token
+    prompt: 'consent', // Force to get refresh token every time
+    state
+  })}`;
+  
+  res.json({ authUrl });
+});
+
+/**
+ * @route   GET /api/auth/google-callback
+ * @desc    Handle Google OAuth callback and exchange code for tokens
+ * @access  Public
+ */
+router.get('/google-callback', async (req, res) => {
+  try {
+    const { code, state } = req.query;
+    
+    // Validate state parameter (prevent CSRF)
+    // In a real app, you'd verify against stored state
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Authorization code is required' });
+    }
+    
+    // Exchange code for tokens
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code'
+    });
+    console.log('Token response:', tokenResponse.data);
+    const { access_token, refresh_token, id_token, expires_in } = tokenResponse.data;
+    
+    // Get user info from Google using the access token instead of verifying the ID token
+    const googleUserInfo = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+    
+    const { sub, email, name, picture } = googleUserInfo.data;
+    
+    // Get or create Firebase user based on the Google email
+    let userRecord;
+    
+    try {
+      // Try to get existing user by email
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (error) {
+      // User doesn't exist, create a new one
+      userRecord = await admin.auth().createUser({
+        email,
+        displayName: name,
+        photoURL: picture
+      });
+    }
+    
+    const uid = userRecord.uid;
+    
+    // Save the OAuth tokens
+    await saveOAuthToken(uid, 
+      { 
+        access_token, 
+        refresh_token, 
+        id_token,
+        expires_in 
+      }, 
+      'google', 
+      GOOGLE_OAUTH_SCOPES
+    );
+    
+    // Check if user exists in Firestore
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    
+    if (!userDoc.exists) {
+      // Create new user document if it doesn't exist
+      await userRef.set({
+        profile: {
+          email,
+          displayName: name || '',
+          photoURL: picture || '',
+          provider: 'google',
+          createdAt: now,
+          updatedAt: now,
+          lastLoginAt: now
+        }
+      });
+    } else {
+      // Update existing user
+      await userRef.update({
+        'profile.lastLoginAt': now,
+        'profile.updatedAt': now
+      });
+    }
+    
+    // Redirect to frontend with success
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth-success?provider=google`);
+  } catch (error) {
+    console.error('Error in Google OAuth callback:', error);
+    res.status(500).json({ error: 'Authentication failed' });
+  }
+});
+
+/**
+ * @route   GET /api/auth/token/google
+ * @desc    Get stored Google OAuth token for a user
+ * @access  Private
+ */
+router.get('/token/google', authenticateUser, async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const token = await getOAuthToken(uid, 'google');
+    if (!token) {
+      return res.status(404).json({ error: 'No Google token found for this user' });
+    }
+    
+    // Don't return the actual token to the frontend for security
+    // Only return token metadata and status
+    return res.status(200).json({
+      provider: 'google',
+      scopes: token.scopes,
+      isExpired: token.isExpired,
+      expiresAt: token.expires_at,
+      hasEmailAccess: token.scopes.includes('https://www.googleapis.com/auth/gmail.readonly')
+    });
+  } catch (error) {
+    console.error('Error getting Google token:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 

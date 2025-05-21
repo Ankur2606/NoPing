@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { db, auth } = require('./config/firebase');
 const dotenv = require('dotenv');
+const { scheduleEmailCronJob, runEmailCronJob } = require('./scripts/emailCronJob');
 
 // Load environment variables
 dotenv.config();
@@ -58,6 +59,18 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  runEmailCronJob();
+  // Schedule the email cron job (runs every hour by default)
+  // You can customize the schedule if needed
+  // if (process.env.ENABLE_EMAIL_CRON !== 'false') {
+  //   const runJob = scheduleEmailCronJob();
+    
+  //   // Optionally run the job immediately on startup
+  //   if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
+  //     console.log('Running email cron job on startup...');
+  //     runJob();
+  //   }
+  // }
 });
 
 module.exports = app;
