@@ -59,18 +59,18 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  runEmailCronJob();
+  // runEmailCronJob();
   // Schedule the email cron job (runs every hour by default)
   // You can customize the schedule if needed
-  // if (process.env.ENABLE_EMAIL_CRON !== 'false') {
-  //   const runJob = scheduleEmailCronJob();
+  if (process.env.ENABLE_EMAIL_CRON !== 'false') {
+    const runJob = scheduleEmailCronJob();
     
-  //   // Optionally run the job immediately on startup
-  //   if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
-  //     console.log('Running email cron job on startup...');
-  //     runJob();
-  //   }
-  // }
+    // Optionally run the job immediately on startup
+    if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
+      console.log('Running email cron job on startup...');
+      runJob();
+    }
+  }
 });
 
 module.exports = app;
