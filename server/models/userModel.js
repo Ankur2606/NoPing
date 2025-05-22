@@ -7,7 +7,10 @@ const defaultUserProfile = {
   email: "",
   displayName: "",
   photoURL: "",
-  createdAt: null // Will be set to admin.firestore.FieldValue.serverTimestamp() when creating
+  createdAt: null, // Will be set to admin.firestore.FieldValue.serverTimestamp() when creating
+  telegramId: null, // Telegram user ID (if connected)
+  telegramChatId: null, // Telegram chat ID for sending messages
+  telegramUsername: null // Telegram username
 };
 
 // Default user preferences

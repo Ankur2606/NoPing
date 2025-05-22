@@ -247,3 +247,45 @@ export const authApi = {
     }
   }
 };
+
+// Telegram API related functions
+export const telegramApi = {
+  // Get status of Telegram integration
+  getStatus: () => apiRequest('/telegram/link-status') as Promise<{
+    isLinked: boolean;
+    username?: string;
+  }>,
+  
+  // Generate a verification code to link a Telegram account
+  generateVerificationCode: () => apiRequest('/telegram/generate-code', {
+    method: 'POST'
+  }) as Promise<{
+    verificationCode: string;
+    expiresAt: string;
+  }>,
+  
+  // Verify a code sent by the user to the Telegram bot
+  verifyCode: (code: string) => apiRequest('/telegram/verify-code', {
+    method: 'POST',
+    body: JSON.stringify({ code })
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>,
+  
+  // Unlink Telegram account
+  unlinkAccount: () => apiRequest('/telegram/unlink', {
+    method: 'POST'
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>,
+  
+  // Send a test message to user's Telegram account
+  sendTestMessage: () => apiRequest('/telegram/test-message', {
+    method: 'POST'
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>
+};

@@ -4,8 +4,13 @@ const { db, auth } = require('./config/firebase');
 const dotenv = require('dotenv');
 const { scheduleEmailCronJob, runEmailCronJob } = require('./scripts/emailCronJob');
 
-// Load environment variables
+// Load environment variables first
 dotenv.config();
+
+// Telegram Service (load after env variables are set)
+const telegramService = require('./services/telegramService');
+
+// Environment variables already loaded above
 
 // Create Express app
 const app = express();
@@ -18,13 +23,16 @@ app.use(express.json());
 // Authentication middleware
 const authenticateUser = async (req, res, next) => {
   try {
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const token = authHeader.split(' ')[1];
+    // console.log('Authorization header:', token);
     const decodedToken = await auth.verifyIdToken(token);
+    // console.log('Decoded token:', decodedToken);
     req.user = {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -43,6 +51,8 @@ const userRoutes = require('./routes/userRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
+const telegramRoutes = require('./routes/telegramRoutes');
+const telegramVerificationRoutes = require('./routes/telegramVerificationRoutes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -50,6 +60,15 @@ app.use('/api/user', authenticateUser, userRoutes);
 app.use('/api/messages', authenticateUser, messageRoutes);
 app.use('/api/tasks', authenticateUser, taskRoutes);
 app.use('/api/services', authenticateUser, serviceRoutes);
+// Explicitly set up the bot-verify route without authentication (must be defined before other routes)
+app.all('/api/telegram/bot-verify', (req, res) => {
+  const { botVerifyHealthCheck } = require('./routes/telegramVerificationRoutes');
+  botVerifyHealthCheck(req, res);
+});
+
+// Set up other routes with authentication
+app.use('/api/telegram', authenticateUser, telegramRoutes);
+app.use('/api/telegram', authenticateUser, telegramVerificationRoutes);
 
 // Default route
 app.get('/', (req, res) => {
@@ -59,9 +78,22 @@ app.get('/', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  // runEmailCronJob();
+  
+  // Initialize Telegram bot (if API key is set)
+  if (process.env.TELEGRAM_BOT_API_KEY) {
+    console.log('Telegram bot service available at:');
+    console.log(`- Bot verification endpoint: http://localhost:${PORT}/api/telegram/bot-verify`);
+    
+    if (telegramService.bot) {
+      console.log(`- Bot username: @${telegramService.bot.options.username || 'Unknown'}`);
+    } else {
+      console.log('- Bot initialization failed. Check your TELEGRAM_BOT_API_KEY.');
+    }
+  } else {
+    console.log('Telegram bot service disabled (TELEGRAM_BOT_API_KEY not set)');
+  }
+  
   // Schedule the email cron job (runs every hour by default)
-  // You can customize the schedule if needed
   if (process.env.ENABLE_EMAIL_CRON !== 'false') {
     const runJob = scheduleEmailCronJob();
     
