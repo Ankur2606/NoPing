@@ -220,7 +220,7 @@ export function PriorityMessages() {
                   </span>
                 </div>
                 <div className="font-medium">{getMessageSubject(message)}</div>
-                <div className="text-sm text-muted-foreground">{getMessagePreview(message)}</div>
+                {/* <div className="text-sm text-muted-foreground">{getMessagePreview(message)}</div> */}
                 <div className="mt-2 flex items-center gap-2">
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/inbox?message=${message.id}`}>View</a>

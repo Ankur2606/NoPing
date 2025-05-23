@@ -193,16 +193,16 @@ async function callNebiusAI(prompt) {
   try {
     const response = await client.chat.completions.create({
         model: "Qwen/Qwen2.5-32B-Instruct",
-        max_tokens: 10,
+        max_tokens: 200,
         temperature: 0,
         messages: [
             {
             role: "system",
-            text: 'You are a professional task creation assistant that creates structured tasks from message content.'
+            content: 'You are a professional task creation assistant that creates structured tasks from message content.'
           },
           {
             role: 'user',
-            text: prompt
+            content: prompt
           }
         ]
       }
