@@ -1,0 +1,28 @@
+{
+  "name": "flow-gen-sync-contract-tests",
+  "version": "1.0.0",
+  "description": "Local testing environment for FlowSync BNB Smart Chain contracts",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat compile",
+    "node": "hardhat node",
+    "deploy": "hardhat run scripts/deploy.js",
+    "deploy:testnet": "hardhat run scripts/deploy-testnet.js --network bscTestnet",
+    "dev": "node start-dev.js", 
+    "console": "hardhat console",
+    "interactive": "hardhat run scripts/interactive.js --network localhost",
+    "test:payments": "hardhat run scripts/test-payments.js --network localhost"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "@nomiclabs/hardhat-ethers": "^2.0.0",
+    "@openzeppelin/contracts": "^4.8.0",
+    "chai": "^4.3.7",
+    "dotenv": "^16.0.3",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.12.0"
+  }
+}

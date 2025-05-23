@@ -20,30 +20,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Authentication middleware
-const authenticateUser = async (req, res, next) => {
-  try {
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    // console.log('Authorization header:', token);
-    const decodedToken = await auth.verifyIdToken(token);
-    // console.log('Decoded token:', decodedToken);
-    req.user = {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-      displayName: decodedToken.name
-    };
-    next();
-  } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(401).json({ error: 'Unauthorized' });
-  }
-};
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -53,6 +29,9 @@ const taskRoutes = require('./routes/taskRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const telegramRoutes = require('./routes/telegramRoutes');
 const telegramVerificationRoutes = require('./routes/telegramVerificationRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
+const authenticateUser = require('./middlewares/authMiddleware');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -60,6 +39,8 @@ app.use('/api/user', authenticateUser, userRoutes);
 app.use('/api/messages', authenticateUser, messageRoutes);
 app.use('/api/tasks', authenticateUser, taskRoutes);
 app.use('/api/services', authenticateUser, serviceRoutes);
+app.use('/api/payments', authenticateUser, paymentRoutes);
+app.use('/api/subscriptions', authenticateUser, subscriptionRoutes);
 // Explicitly set up the bot-verify route without authentication (must be defined before other routes)
 app.all('/api/telegram/bot-verify', (req, res) => {
   const { botVerifyHealthCheck } = require('./routes/telegramVerificationRoutes');
