@@ -102,16 +102,16 @@ const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") =>
 // Subscription pricing
 const subscriptionPricing = {
   [SUBSCRIPTION_TIERS.FREE]: {
-    [BILLING_PERIODS.MONTHLY]: 0.00001,
-    [BILLING_PERIODS.ANNUAL]: 0.00001
+    [BILLING_PERIODS.MONTHLY]: 0.0009,
+    [BILLING_PERIODS.ANNUAL]: 0.0009
   },
   [SUBSCRIPTION_TIERS.PRO]: {
-    [BILLING_PERIODS.MONTHLY]: 0.00001, // 0.05 BNB per month
-    [BILLING_PERIODS.ANNUAL]: 0.00001, // 0.5 BNB per year (save 16.7%)
+    [BILLING_PERIODS.MONTHLY]: 0.0009, // 0.05 BNB per month
+    [BILLING_PERIODS.ANNUAL]: 0.0009, // 0.5 BNB per year (save 16.7%)
   },
   [SUBSCRIPTION_TIERS.ENTERPRISE]: {
-    [BILLING_PERIODS.MONTHLY]: 0.00001, // 0.2 BNB per month
-    [BILLING_PERIODS.ANNUAL]: 0.00001, // 2 BNB per year (save 16.7%)
+    [BILLING_PERIODS.MONTHLY]: 0.0009, // 0.2 BNB per month
+    [BILLING_PERIODS.ANNUAL]: 0.0009, // 2 BNB per year (save 16.7%)
   }
 };
 
