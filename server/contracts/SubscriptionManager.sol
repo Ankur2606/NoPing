@@ -1,368 +1,365 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.20;
 
-import "./PaymentProcessor.sol";
+import "./AccessControl.sol";
 
 /**
  * @title SubscriptionManager
- * @dev Contract for managing subscriptions paid in BNB
+ * @dev Contract for managing subscription-based services on the BNB Chain
  */
 contract SubscriptionManager {
-    address public owner;
-    PaymentProcessor public paymentProcessor;
+    AccessControl private _accessControl;
     
-    // Subscription tier enum
-    enum SubscriptionTier { Free, Pro, Enterprise }
+    // Subscription status enum
+    enum SubscriptionStatus { Active, Expired, Canceled, Paused }
     
-    // Billing period enum
-    enum BillingPeriod { Monthly, Annual }
+    // Subscription plan struct
+    struct SubscriptionPlan {
+        uint256 id;
+        string name;
+        string description;
+        uint256 price;
+        uint256 durationInDays;
+        bool isActive;
+        string features;
+    }
     
-    // Subscription structure
-    struct Subscription {
+    // User subscription struct
+    struct UserSubscription {
         uint256 id;
         address subscriber;
-        SubscriptionTier tier;
-        BillingPeriod billingPeriod;
+        uint256 planId;
         uint256 startDate;
         uint256 endDate;
-        uint256 lastPaymentId;
+        SubscriptionStatus status;
+        uint256 lastPaymentDate;
+        uint256 nextPaymentDate;
         bool autoRenew;
-        bool active;
     }
     
-    // Price structure
-    struct PricePoint {
-        uint256 monthlyPrice; // Price in wei
-        uint256 annualPrice;  // Price in wei
-    }
+    // Mappings to store subscription data
+    mapping(uint256 => SubscriptionPlan) public subscriptionPlans;
+    mapping(uint256 => UserSubscription) public userSubscriptions;
+    mapping(address => uint256[]) public subscriberSubscriptions;
     
-    // Mapping subscription tiers to prices
-    mapping(SubscriptionTier => PricePoint) public subscriptionPrices;
-    
-    // Mapping from address to subscription
-    mapping(address => Subscription) public subscriptions;
-    
-    // Mapping from address to subscription history
-    mapping(address => Subscription[]) public subscriptionHistory;
-    
-    // Subscription count
-    uint256 public nextSubscriptionId;
+    uint256 public planCount;
+    uint256 public subscriptionCount;
+    address public treasury;
     
     // Events
-    event SubscriptionCreated(uint256 indexed subscriptionId, address indexed subscriber, SubscriptionTier tier, BillingPeriod period, uint256 endDate);
-    event SubscriptionCancelled(uint256 indexed subscriptionId, address indexed subscriber);
-    event SubscriptionRenewed(uint256 indexed subscriptionId, address indexed subscriber, uint256 newEndDate);
-    event SubscriptionTierChanged(uint256 indexed subscriptionId, address indexed subscriber, SubscriptionTier oldTier, SubscriptionTier newTier);
-    event PriceUpdated(SubscriptionTier tier, uint256 monthlyPrice, uint256 annualPrice);
+    event PlanCreated(uint256 indexed planId, string name, uint256 price);
+    event PlanUpdated(uint256 indexed planId, string name, uint256 price);
+    event PlanDeactivated(uint256 indexed planId);
+    event SubscriptionCreated(uint256 indexed subscriptionId, address indexed subscriber, uint256 indexed planId);
+    event SubscriptionRenewed(uint256 indexed subscriptionId, uint256 newEndDate);
+    event SubscriptionCanceled(uint256 indexed subscriptionId);
+    event SubscriptionPaused(uint256 indexed subscriptionId);
+    event SubscriptionResumed(uint256 indexed subscriptionId);
+    event TreasuryUpdated(address oldTreasury, address newTreasury);
     
     /**
-     * @dev Constructor to set the contract owner and payment processor
-     * @param _paymentProcessorAddress Address of the PaymentProcessor contract
+     * @dev Constructor
+     * @param accessControlAddress Address of the AccessControl contract
      */
-    constructor(address _paymentProcessorAddress) {
-        owner = msg.sender;
-        paymentProcessor = PaymentProcessor(_paymentProcessorAddress);
-        nextSubscriptionId = 1;
-        
-        // Set initial prices (in wei)
-        // Pro tier: 0.05 BNB monthly / 0.5 BNB annually
-        subscriptionPrices[SubscriptionTier.Pro] = PricePoint({
-            monthlyPrice: 50000000000000000, // 0.05 BNB in wei
-            annualPrice: 500000000000000000  // 0.5 BNB in wei
-        });
-        
-        // Enterprise tier: 0.2 BNB monthly / 2.0 BNB annually
-        subscriptionPrices[SubscriptionTier.Enterprise] = PricePoint({
-            monthlyPrice: 200000000000000000, // 0.2 BNB in wei
-            annualPrice: 2000000000000000000  // 2.0 BNB in wei
-        });
-        
-        // Free tier is always 0
-        subscriptionPrices[SubscriptionTier.Free] = PricePoint({
-            monthlyPrice: 0,
-            annualPrice: 0
-        });
+    constructor(address accessControlAddress) {
+        require(accessControlAddress != address(0), "Invalid AccessControl address");
+        _accessControl = AccessControl(accessControlAddress);
+        planCount = 0;
+        subscriptionCount = 0;
+        treasury = msg.sender;
     }
     
     /**
-     * @dev Modifier to restrict function access to owner only
+     * @dev Modifier to restrict access to contract owner
      */
     modifier onlyOwner() {
-        require(msg.sender == owner, "SubscriptionManager: caller is not the owner");
+        require(msg.sender == _accessControl.owner(), "Caller is not the owner");
         _;
     }
     
     /**
-     * @dev Purchase a subscription
-     * @param _tier Subscription tier to purchase
-     * @param _period Billing period (monthly or annual)
-     * @param _autoRenew Whether to auto-renew the subscription
-     * @return subscriptionId The ID of the created subscription
+     * @dev Modifier to restrict access to subscription manager role
      */
-    function purchaseSubscription(SubscriptionTier _tier, BillingPeriod _period, bool _autoRenew) external payable returns (uint256) {
-        // Check if tier is valid
-        require(_tier == SubscriptionTier.Free || _tier == SubscriptionTier.Pro || _tier == SubscriptionTier.Enterprise, 
-                "SubscriptionManager: invalid tier");
+    modifier onlySubscriptionManager() {
+        require(
+            _accessControl.hasRole(keccak256("ADMIN_ROLE"), msg.sender) || 
+            msg.sender == _accessControl.owner(),
+            "Caller is not authorized for subscription management"
+        );
+        _;
+    }
+    
+    /**
+     * @dev Create a new subscription plan
+     * @param name Plan name
+     * @param description Plan description
+     * @param price Plan price in wei
+     * @param durationInDays Duration in days
+     * @param features JSON string with plan features
+     */
+    function createSubscriptionPlan(
+        string calldata name,
+        string calldata description,
+        uint256 price,
+        uint256 durationInDays,
+        string calldata features
+    ) external onlySubscriptionManager {
+        require(bytes(name).length > 0, "Plan name cannot be empty");
+        require(durationInDays > 0, "Duration must be greater than 0");
         
-        // Calculate required payment amount
-        uint256 requiredAmount = _period == BillingPeriod.Monthly ? 
-                                subscriptionPrices[_tier].monthlyPrice : 
-                                subscriptionPrices[_tier].annualPrice;
+        uint256 planId = planCount++;
         
-        // Free tier doesn't need payment
-        if (_tier != SubscriptionTier.Free) {
-            require(msg.value >= requiredAmount, "SubscriptionManager: insufficient payment amount");
-        }
+        subscriptionPlans[planId] = SubscriptionPlan({
+            id: planId,
+            name: name,
+            description: description,
+            price: price,
+            durationInDays: durationInDays,
+            isActive: true,
+            features: features
+        });
         
-        uint256 subscriptionId = nextSubscriptionId++;
-        uint256 duration = _period == BillingPeriod.Monthly ? 30 days : 365 days;
-        uint256 endDate = block.timestamp + duration;
-        uint256 paymentId = 0;
+        emit PlanCreated(planId, name, price);
+    }
+    
+    /**
+     * @dev Update an existing subscription plan
+     * @param planId ID of the plan to update
+     * @param name Plan name
+     * @param description Plan description
+     * @param price Plan price in wei
+     * @param durationInDays Duration in days
+     * @param features JSON string with plan features
+     */
+    function updateSubscriptionPlan(
+        uint256 planId,
+        string calldata name,
+        string calldata description,
+        uint256 price,
+        uint256 durationInDays,
+        string calldata features
+    ) external onlySubscriptionManager {
+        require(planId < planCount, "Plan does not exist");
+        require(bytes(name).length > 0, "Plan name cannot be empty");
+        require(durationInDays > 0, "Duration must be greater than 0");
         
-        // For paid tiers, process payment
-        if (_tier != SubscriptionTier.Free && msg.value > 0) {
-            string memory metadata = string(abi.encodePacked(
-                '{"subscriptionId":"', _uint2str(subscriptionId), 
-                '","tier":"', _tierToString(_tier),
-                '","period":"', _periodToString(_period), '"}'
-            ));
-            
-            // Forward payment to the payment processor
-            paymentId = paymentProcessor.processPayment{value: msg.value}(metadata);
-        }
+        SubscriptionPlan storage plan = subscriptionPlans[planId];
         
-        // Archive current subscription to history if exists
-        if (subscriptions[msg.sender].id > 0 && subscriptions[msg.sender].active) {
-            subscriptionHistory[msg.sender].push(subscriptions[msg.sender]);
-            subscriptions[msg.sender].active = false;
-        }
+        plan.name = name;
+        plan.description = description;
+        plan.price = price;
+        plan.durationInDays = durationInDays;
+        plan.features = features;
         
-        // Create new subscription
-        subscriptions[msg.sender] = Subscription({
+        emit PlanUpdated(planId, name, price);
+    }
+    
+    /**
+     * @dev Deactivate a subscription plan
+     * @param planId ID of the plan to deactivate
+     */
+    function deactivateSubscriptionPlan(uint256 planId) external onlySubscriptionManager {
+        require(planId < planCount, "Plan does not exist");
+        
+        subscriptionPlans[planId].isActive = false;
+        
+        emit PlanDeactivated(planId);
+    }
+    
+    /**
+     * @dev Subscribe to a plan
+     * @param planId ID of the plan to subscribe to
+     * @param autoRenew Whether to auto-renew the subscription
+     */
+    function subscribe(uint256 planId, bool autoRenew) external payable {
+        require(planId < planCount, "Plan does not exist");
+        SubscriptionPlan storage plan = subscriptionPlans[planId];
+        
+        require(plan.isActive, "Subscription plan is not active");
+        require(msg.value >= plan.price, "Insufficient payment");
+        
+        uint256 subscriptionId = subscriptionCount++;
+        uint256 startDate = block.timestamp;
+        uint256 endDate = startDate + (plan.durationInDays * 1 days);
+        
+        userSubscriptions[subscriptionId] = UserSubscription({
             id: subscriptionId,
             subscriber: msg.sender,
-            tier: _tier,
-            billingPeriod: _period,
-            startDate: block.timestamp,
+            planId: planId,
+            startDate: startDate,
             endDate: endDate,
-            lastPaymentId: paymentId,
-            autoRenew: _autoRenew,
-            active: true
+            status: SubscriptionStatus.Active,
+            lastPaymentDate: startDate,
+            nextPaymentDate: autoRenew ? endDate : 0,
+            autoRenew: autoRenew
         });
         
-        emit SubscriptionCreated(subscriptionId, msg.sender, _tier, _period, endDate);
-        return subscriptionId;
+        subscriberSubscriptions[msg.sender].push(subscriptionId);
+        
+        // Transfer payment to treasury
+        (bool success, ) = treasury.call{value: msg.value}("");
+        require(success, "Payment transfer failed");
+        
+        emit SubscriptionCreated(subscriptionId, msg.sender, planId);
     }
     
     /**
-     * @dev Cancel subscription
+     * @dev Renew an existing subscription
+     * @param subscriptionId ID of the subscription to renew
      */
-    function cancelSubscription() external {
-        require(subscriptions[msg.sender].active, "SubscriptionManager: no active subscription");
+    function renewSubscription(uint256 subscriptionId) external payable {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        UserSubscription storage subscription = userSubscriptions[subscriptionId];
         
-        // Move to history
-        subscriptionHistory[msg.sender].push(subscriptions[msg.sender]);
+        require(
+            subscription.subscriber == msg.sender || 
+            _accessControl.hasRole(keccak256("ADMIN_ROLE"), msg.sender) ||
+            msg.sender == _accessControl.owner(),
+            "Not authorized to renew this subscription"
+        );
         
-        // Mark as inactive
-        subscriptions[msg.sender].active = false;
-        subscriptions[msg.sender].autoRenew = false;
+        SubscriptionPlan storage plan = subscriptionPlans[subscription.planId];
+        require(plan.isActive, "Subscription plan is no longer active");
+        require(msg.value >= plan.price, "Insufficient payment");
         
-        emit SubscriptionCancelled(subscriptions[msg.sender].id, msg.sender);
-    }
-    
-    /**
-     * @dev Change subscription tier
-     * @param _newTier New subscription tier
-     * @param _newPeriod New billing period
-     * @return Required additional payment to upgrade, or 0 if downgrading
-     */
-    function changeTier(SubscriptionTier _newTier, BillingPeriod _newPeriod) external view returns (uint256) {
-        require(subscriptions[msg.sender].active, "SubscriptionManager: no active subscription");
+        subscription.lastPaymentDate = block.timestamp;
         
-        SubscriptionTier currentTier = subscriptions[msg.sender].tier;
-        BillingPeriod currentPeriod = subscriptions[msg.sender].billingPeriod;
-        
-        // If moving to free, no payment needed
-        if (_newTier == SubscriptionTier.Free) {
-            return 0;
+        // If subscription expired, start fresh from now
+        if (subscription.endDate < block.timestamp || subscription.status != SubscriptionStatus.Active) {
+            subscription.startDate = block.timestamp;
+            subscription.status = SubscriptionStatus.Active;
         }
         
-        // Calculate remaining time on current subscription
-        uint256 remainingTime = subscriptions[msg.sender].endDate - block.timestamp;
-        
-        // Get current and new prices
-        uint256 currentPrice = currentPeriod == BillingPeriod.Monthly ? 
-                              subscriptionPrices[currentTier].monthlyPrice : 
-                              subscriptionPrices[currentTier].annualPrice;
-        
-        uint256 newPrice = _newPeriod == BillingPeriod.Monthly ? 
-                          subscriptionPrices[_newTier].monthlyPrice : 
-                          subscriptionPrices[_newTier].annualPrice;
-        
-        // Calculate prorated current value
-        uint256 periodDuration = currentPeriod == BillingPeriod.Monthly ? 30 days : 365 days;
-        uint256 proratedCurrentValue = (currentPrice * remainingTime) / periodDuration;
-        
-        // Calculate required new payment (newPrice - proratedCurrentValue)
-        // If downgrading, no additional payment needed
-        if (newPrice <= proratedCurrentValue) {
-            return 0;
-        } else {
-            return newPrice - proratedCurrentValue;
-        }
-    }
-    
-    /**
-     * @dev Process tier change payment
-     * @param _newTier New subscription tier
-     * @param _newPeriod New billing period
-     * @param _autoRenew Whether to auto-renew the subscription
-     */
-    function processTierChange(SubscriptionTier _newTier, BillingPeriod _newPeriod, bool _autoRenew) external payable {
-        require(subscriptions[msg.sender].active, "SubscriptionManager: no active subscription");
-        
-        SubscriptionTier oldTier = subscriptions[msg.sender].tier;
-        uint256 requiredAmount = this.changeTier(_newTier, _newPeriod);
-        
-        // Check payment amount
-        if (requiredAmount > 0) {
-            require(msg.value >= requiredAmount, "SubscriptionManager: insufficient payment for tier change");
+        // Add duration to the end date
+        subscription.endDate = subscription.endDate > block.timestamp ? 
+                             subscription.endDate + (plan.durationInDays * 1 days) :
+                             block.timestamp + (plan.durationInDays * 1 days);
+                             
+        if (subscription.autoRenew) {
+            subscription.nextPaymentDate = subscription.endDate;
         }
         
-        uint256 paymentId = 0;
+        // Transfer payment to treasury
+        (bool success, ) = treasury.call{value: msg.value}("");
+        require(success, "Payment transfer failed");
         
-        // Process payment if needed
-        if (requiredAmount > 0 && msg.value > 0) {
-            string memory metadata = string(abi.encodePacked(
-                '{"subscriptionId":"', _uint2str(subscriptions[msg.sender].id), 
-                '","action":"tier_change",',
-                '"oldTier":"', _tierToString(oldTier),
-                '","newTier":"', _tierToString(_newTier),
-                '","period":"', _periodToString(_newPeriod), '"}'
-            ));
-            
-            // Forward payment to payment processor
-            paymentId = paymentProcessor.processPayment{value: msg.value}(metadata);
-        }
-        
-        // Calculate new end date
-        uint256 duration = _newPeriod == BillingPeriod.Monthly ? 30 days : 365 days;
-        uint256 newEndDate = block.timestamp + duration;
-        
-        // Update subscription
-        subscriptions[msg.sender].tier = _newTier;
-        subscriptions[msg.sender].billingPeriod = _newPeriod;
-        subscriptions[msg.sender].startDate = block.timestamp;
-        subscriptions[msg.sender].endDate = newEndDate;
-        
-        if (requiredAmount > 0) {
-            subscriptions[msg.sender].lastPaymentId = paymentId;
-        }
-        
-        subscriptions[msg.sender].autoRenew = _autoRenew;
-        
-        emit SubscriptionTierChanged(subscriptions[msg.sender].id, msg.sender, oldTier, _newTier);
+        emit SubscriptionRenewed(subscriptionId, subscription.endDate);
     }
     
     /**
-     * @dev Get subscription details for a user
-     * @param _user Address of the user
-     * @return Subscription struct with subscription details
+     * @dev Cancel a subscription
+     * @param subscriptionId ID of the subscription to cancel
      */
-    function getSubscription(address _user) external view returns (Subscription memory) {
-        return subscriptions[_user];
-    }
-    
-    /**
-     * @dev Get subscription history for a user
-     * @param _user Address of the user
-     * @return Array of subscription structs
-     */
-    function getSubscriptionHistory(address _user) external view returns (Subscription[] memory) {
-        return subscriptionHistory[_user];
-    }
-    
-    /**
-     * @dev Update subscription prices (owner only)
-     * @param _tier Tier to update
-     * @param _monthlyPrice New monthly price in wei
-     * @param _annualPrice New annual price in wei
-     */
-    function updatePrices(SubscriptionTier _tier, uint256 _monthlyPrice, uint256 _annualPrice) external onlyOwner {
-        subscriptionPrices[_tier] = PricePoint({
-            monthlyPrice: _monthlyPrice,
-            annualPrice: _annualPrice
-        });
+    function cancelSubscription(uint256 subscriptionId) external {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        UserSubscription storage subscription = userSubscriptions[subscriptionId];
         
-        emit PriceUpdated(_tier, _monthlyPrice, _annualPrice);
-    }
-    
-    /**
-     * @dev Transfer ownership of the contract (owner only)
-     * @param _newOwner New owner address
-     */
-    function transferOwnership(address _newOwner) external onlyOwner {
-        require(_newOwner != address(0), "SubscriptionManager: new owner cannot be zero address");
-        owner = _newOwner;
-    }
-    
-    /**
-     * @dev Check if a user's subscription is active and not expired
-     * @param _user Address of the user
-     * @return bool Whether the subscription is active and not expired
-     */
-    function isActiveSubscription(address _user) external view returns (bool) {
-        return subscriptions[_user].active && subscriptions[_user].endDate >= block.timestamp;
-    }
-    
-    /**
-     * @dev Convert uint to string (helper function)
-     * @param _value Value to convert
-     * @return string representation
-     */
-    function _uint2str(uint256 _value) internal pure returns (string memory) {
-        if (_value == 0) {
-            return "0";
-        }
+        require(
+            subscription.subscriber == msg.sender || 
+            _accessControl.hasRole(keccak256("ADMIN_ROLE"), msg.sender) ||
+            msg.sender == _accessControl.owner(),
+            "Not authorized to cancel this subscription"
+        );
         
-        uint256 temp = _value;
-        uint256 digits;
+        subscription.status = SubscriptionStatus.Canceled;
+        subscription.autoRenew = false;
+        subscription.nextPaymentDate = 0;
         
-        while (temp != 0) {
-            digits++;
-            temp /= 10;
-        }
-        
-        bytes memory buffer = new bytes(digits);
-        while (_value != 0) {
-            digits -= 1;
-            buffer[digits] = bytes1(uint8(48 + uint256(_value % 10)));
-            _value /= 10;
-        }
-        
-        return string(buffer);
+        emit SubscriptionCanceled(subscriptionId);
     }
     
     /**
-     * @dev Convert tier enum to string (helper function)
-     * @param _tier Tier enum
-     * @return string representation
+     * @dev Pause a subscription (temporary pause)
+     * @param subscriptionId ID of the subscription to pause
      */
-    function _tierToString(SubscriptionTier _tier) internal pure returns (string memory) {
-        if (_tier == SubscriptionTier.Free) return "Free";
-        if (_tier == SubscriptionTier.Pro) return "Pro";
-        if (_tier == SubscriptionTier.Enterprise) return "Enterprise";
-        return "Unknown";
+    function pauseSubscription(uint256 subscriptionId) external {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        UserSubscription storage subscription = userSubscriptions[subscriptionId];
+        
+        require(
+            subscription.subscriber == msg.sender || 
+            _accessControl.hasRole(keccak256("ADMIN_ROLE"), msg.sender) ||
+            msg.sender == _accessControl.owner(),
+            "Not authorized to pause this subscription"
+        );
+        
+        require(subscription.status == SubscriptionStatus.Active, "Subscription is not active");
+        
+        subscription.status = SubscriptionStatus.Paused;
+        
+        emit SubscriptionPaused(subscriptionId);
     }
     
     /**
-     * @dev Convert period enum to string (helper function)
-     * @param _period Period enum
-     * @return string representation
+     * @dev Resume a paused subscription
+     * @param subscriptionId ID of the subscription to resume
      */
-    function _periodToString(BillingPeriod _period) internal pure returns (string memory) {
-        if (_period == BillingPeriod.Monthly) return "Monthly";
-        if (_period == BillingPeriod.Annual) return "Annual";
-        return "Unknown";
+    function resumeSubscription(uint256 subscriptionId) external {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        UserSubscription storage subscription = userSubscriptions[subscriptionId];
+        
+        require(
+            subscription.subscriber == msg.sender || 
+            _accessControl.hasRole(keccak256("ADMIN_ROLE"), msg.sender) ||
+            msg.sender == _accessControl.owner(),
+            "Not authorized to resume this subscription"
+        );
+        
+        require(subscription.status == SubscriptionStatus.Paused, "Subscription is not paused");
+        require(subscription.endDate > block.timestamp, "Subscription has expired");
+        
+        subscription.status = SubscriptionStatus.Active;
+        
+        emit SubscriptionResumed(subscriptionId);
+    }
+    
+    /**
+     * @dev Get all subscription IDs for a subscriber
+     * @param subscriber Address of the subscriber
+     * @return uint256[] Array of subscription IDs
+     */
+    function getSubscriberSubscriptions(address subscriber) external view returns (uint256[] memory) {
+        return subscriberSubscriptions[subscriber];
+    }
+    
+    /**
+     * @dev Get subscription details
+     * @param subscriptionId ID of the subscription
+     * @return UserSubscription struct with subscription details
+     */
+    function getSubscriptionDetails(uint256 subscriptionId) external view returns (UserSubscription memory) {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        return userSubscriptions[subscriptionId];
+    }
+    
+    /**
+     * @dev Check if a subscription is active
+     * @param subscriptionId ID of the subscription
+     * @return bool True if active, False otherwise
+     */
+    function isSubscriptionActive(uint256 subscriptionId) external view returns (bool) {
+        require(subscriptionId < subscriptionCount, "Subscription does not exist");
+        UserSubscription storage subscription = userSubscriptions[subscriptionId];
+        
+        return (subscription.status == SubscriptionStatus.Active && subscription.endDate >= block.timestamp);
+    }
+    
+    /**
+     * @dev Get all plan IDs
+     * @return uint256 Number of plans
+     */
+    function getPlanCount() external view returns (uint256) {
+        return planCount;
+    }
+    
+    /**
+     * @dev Update treasury address
+     * @param newTreasury Address of the new treasury
+     */
+    function updateTreasury(address newTreasury) external onlyOwner {
+        require(newTreasury != address(0), "Invalid treasury address");
+        
+        emit TreasuryUpdated(treasury, newTreasury);
+        treasury = newTreasury;
     }
 }

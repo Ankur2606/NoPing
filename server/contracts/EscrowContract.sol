@@ -1,231 +1,241 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.20;
 
 import "./AccessControl.sol";
 
 /**
  * @title EscrowContract
- * @dev Contract for holding funds in escrow for FlowSync payments
+ * @dev Contract for managing escrow transactions on the BNB Chain
  */
 contract EscrowContract {
-    address public owner;
-    AccessControl public accessControl;
+    AccessControl private _accessControl;
     
     // Escrow status enum
-    enum EscrowStatus { Created, Funded, Released, Refunded, Disputed, Resolved }
+    enum EscrowStatus { Created, Funded, Approved, Disputed, Refunded, Completed }
     
-    // Escrow structure
-    struct Escrow {
+    // Escrow transaction struct to store all details
+    struct EscrowTransaction {
         uint256 id;
-        address payer;
-        address payee;
+        address depositor;
+        address beneficiary;
         uint256 amount;
         uint256 createdAt;
-        uint256 releasedAt;
+        uint256 completedAt;
         EscrowStatus status;
-        string metadata; // JSON string with additional escrow data
+        string terms;
+        string metadata;
     }
     
-    // Mapping escrow ID to Escrow
-    mapping(uint256 => Escrow) public escrows;
-    uint256 public nextEscrowId;
+    // Mappings to store escrow data
+    mapping(uint256 => EscrowTransaction) public escrows;
+    mapping(address => uint256[]) public userEscrows;
+    
+    uint256 public escrowCount;
+    uint256 public escrowFeePercentage; // Basis points (e.g., 100 = 1%)
+    address public feeCollector;
     
     // Events
-    event EscrowCreated(uint256 indexed escrowId, address indexed payer, address indexed payee, uint256 amount);
-    event EscrowFunded(uint256 indexed escrowId, address indexed payer, uint256 amount);
-    event EscrowReleased(uint256 indexed escrowId, address indexed payee, uint256 amount);
-    event EscrowRefunded(uint256 indexed escrowId, address indexed payer, uint256 amount);
-    event EscrowDisputed(uint256 indexed escrowId, string reason);
-    event EscrowResolved(uint256 indexed escrowId, EscrowStatus resolution);
+    event EscrowCreated(uint256 indexed escrowId, address indexed depositor, address indexed beneficiary, uint256 amount);
+    event EscrowFunded(uint256 indexed escrowId, uint256 amount);
+    event EscrowApproved(uint256 indexed escrowId);
+    event EscrowDisputed(uint256 indexed escrowId);
+    event EscrowRefunded(uint256 indexed escrowId, uint256 amount);
+    event EscrowCompleted(uint256 indexed escrowId, uint256 amount);
+    event EscrowFeePercentageUpdated(uint256 oldPercentage, uint256 newPercentage);
+    event FeeCollectorUpdated(address oldCollector, address newCollector);
     
     /**
-     * @dev Constructor to set the contract owner and AccessControl contract
-     * @param _accessControlAddress Address of the AccessControl contract
+     * @dev Constructor
+     * @param accessControlAddress Address of the AccessControl contract
      */
-    constructor(address _accessControlAddress) {
-        owner = msg.sender;
-        accessControl = AccessControl(_accessControlAddress);
-        nextEscrowId = 1;
+    constructor(address accessControlAddress) {
+        require(accessControlAddress != address(0), "Invalid AccessControl address");
+        _accessControl = AccessControl(accessControlAddress);
+        escrowCount = 0;
+        escrowFeePercentage = 100; // Default 1%
+        feeCollector = msg.sender;
     }
     
     /**
-     * @dev Modifier to restrict function access to owner only
+     * @dev Modifier to restrict access to contract owner
      */
     modifier onlyOwner() {
-        require(msg.sender == owner, "EscrowContract: caller is not the owner");
+        require(msg.sender == _accessControl.owner(), "Caller is not the owner");
         _;
     }
     
     /**
-     * @dev Modifier to restrict function access to payment manager role
+     * @dev Modifier to restrict access to arbiter role
      */
-    modifier onlyPaymentManager() {
-        require(accessControl.hasRole(accessControl.PAYMENT_MANAGER_ROLE(), msg.sender), 
-                "EscrowContract: caller does not have payment manager role");
+    modifier onlyArbiter() {
+        require(
+            _accessControl.hasRole(keccak256("ARBITER_ROLE"), msg.sender) || 
+            msg.sender == _accessControl.owner(),
+            "Caller is not an authorized arbiter"
+        );
         _;
     }
     
     /**
-     * @dev Create a new escrow agreement
-     * @param _payee Address that will receive funds
-     * @param _metadata JSON string with additional escrow data
-     * @return escrowId The ID of the created escrow
+     * @dev Create new escrow transaction
+     * @param beneficiary Address of the beneficiary
+     * @param terms String describing the terms of the escrow
+     * @param metadata Additional escrow details
      */
-    function createEscrow(address _payee, string memory _metadata) external payable returns (uint256) {
-        require(_payee != address(0), "EscrowContract: payee cannot be zero address");
-        require(msg.value > 0, "EscrowContract: escrow amount must be greater than 0");
+    function createEscrow(
+        address beneficiary,
+        string calldata terms,
+        string calldata metadata
+    ) external payable {
+        require(msg.value > 0, "Escrow amount must be greater than 0");
+        require(beneficiary != address(0), "Invalid beneficiary address");
+        require(beneficiary != msg.sender, "Beneficiary cannot be the same as depositor");
         
-        uint256 escrowId = nextEscrowId++;
+        uint256 escrowId = escrowCount++;
         
-        // Create escrow record
-        escrows[escrowId] = Escrow({
+        // Store escrow details
+        escrows[escrowId] = EscrowTransaction({
             id: escrowId,
-            payer: msg.sender,
-            payee: _payee,
+            depositor: msg.sender,
+            beneficiary: beneficiary,
             amount: msg.value,
             createdAt: block.timestamp,
-            releasedAt: 0,
+            completedAt: 0,
             status: EscrowStatus.Funded,
-            metadata: _metadata
+            terms: terms,
+            metadata: metadata
         });
         
-        emit EscrowCreated(escrowId, msg.sender, _payee, msg.value);
-        emit EscrowFunded(escrowId, msg.sender, msg.value);
+        // Add to user's escrow history
+        userEscrows[msg.sender].push(escrowId);
+        userEscrows[beneficiary].push(escrowId);
         
-        return escrowId;
+        emit EscrowCreated(escrowId, msg.sender, beneficiary, msg.value);
+        emit EscrowFunded(escrowId, msg.value);
     }
     
     /**
-     * @dev Release funds from escrow to payee
-     * @param _escrowId Escrow ID to release
+     * @dev Release funds to beneficiary (can be called by depositor or arbiter)
+     * @param escrowId ID of the escrow
      */
-    function releaseEscrow(uint256 _escrowId) external {
-        Escrow storage escrow = escrows[_escrowId];
+    function releaseEscrow(uint256 escrowId) external {
+        require(escrowId < escrowCount, "Escrow does not exist");
+        EscrowTransaction storage escrow = escrows[escrowId];
         
-        require(escrow.id == _escrowId, "EscrowContract: escrow does not exist");
-        require(escrow.status == EscrowStatus.Funded, "EscrowContract: escrow not in funded state");
         require(
-            msg.sender == escrow.payer || 
-            msg.sender == owner || 
-            accessControl.hasRole(accessControl.PAYMENT_MANAGER_ROLE(), msg.sender),
-            "EscrowContract: caller not authorized to release escrow"
+            msg.sender == escrow.depositor || 
+            _accessControl.hasRole(keccak256("ARBITER_ROLE"), msg.sender) ||
+            msg.sender == _accessControl.owner(),
+            "Not authorized to release escrow"
         );
         
-        escrow.status = EscrowStatus.Released;
-        escrow.releasedAt = block.timestamp;
+        require(escrow.status == EscrowStatus.Funded, "Escrow is not in funded state");
         
-        // Transfer funds to payee
-        (bool success, ) = escrow.payee.call{value: escrow.amount}("");
-        require(success, "EscrowContract: release transfer failed");
+        escrow.status = EscrowStatus.Completed;
+        escrow.completedAt = block.timestamp;
         
-        emit EscrowReleased(_escrowId, escrow.payee, escrow.amount);
+        // Calculate fee
+        uint256 feeAmount = (escrow.amount * escrowFeePercentage) / 10000;
+        uint256 beneficiaryAmount = escrow.amount - feeAmount;
+        
+        // Transfer fee
+        (bool feeSuccess, ) = feeCollector.call{value: feeAmount}("");
+        require(feeSuccess, "Fee transfer failed");
+        
+        // Transfer to beneficiary
+        (bool success, ) = escrow.beneficiary.call{value: beneficiaryAmount}("");
+        require(success, "Beneficiary transfer failed");
+        
+        emit EscrowCompleted(escrowId, escrow.amount);
     }
     
     /**
-     * @dev Refund escrow to payer
-     * @param _escrowId Escrow ID to refund
+     * @dev Refund to depositor (can only be called by arbiter)
+     * @param escrowId ID of the escrow
      */
-    function refundEscrow(uint256 _escrowId) external onlyPaymentManager {
-        Escrow storage escrow = escrows[_escrowId];
+    function refundEscrow(uint256 escrowId) external onlyArbiter {
+        require(escrowId < escrowCount, "Escrow does not exist");
+        EscrowTransaction storage escrow = escrows[escrowId];
         
-        require(escrow.id == _escrowId, "EscrowContract: escrow does not exist");
         require(escrow.status == EscrowStatus.Funded || escrow.status == EscrowStatus.Disputed, 
-                "EscrowContract: escrow not in refundable state");
+                "Escrow not in refundable state");
         
         escrow.status = EscrowStatus.Refunded;
+        escrow.completedAt = block.timestamp;
         
-        // Transfer funds back to payer
-        (bool success, ) = escrow.payer.call{value: escrow.amount}("");
-        require(success, "EscrowContract: refund transfer failed");
+        // Transfer back to depositor
+        (bool success, ) = escrow.depositor.call{value: escrow.amount}("");
+        require(success, "Depositor refund failed");
         
-        emit EscrowRefunded(_escrowId, escrow.payer, escrow.amount);
+        emit EscrowRefunded(escrowId, escrow.amount);
     }
     
     /**
-     * @dev Mark an escrow as disputed
-     * @param _escrowId Escrow ID to dispute
-     * @param _reason Reason for dispute
+     * @dev Dispute an escrow (can be called by depositor or beneficiary)
+     * @param escrowId ID of the escrow
      */
-    function disputeEscrow(uint256 _escrowId, string memory _reason) external {
-        Escrow storage escrow = escrows[_escrowId];
+    function disputeEscrow(uint256 escrowId) external {
+        require(escrowId < escrowCount, "Escrow does not exist");
+        EscrowTransaction storage escrow = escrows[escrowId];
         
-        require(escrow.id == _escrowId, "EscrowContract: escrow does not exist");
-        require(escrow.status == EscrowStatus.Funded, "EscrowContract: escrow not in funded state");
         require(
-            msg.sender == escrow.payer || 
-            msg.sender == escrow.payee,
-            "EscrowContract: only payer or payee can dispute escrow"
+            msg.sender == escrow.depositor || msg.sender == escrow.beneficiary,
+            "Not authorized to dispute escrow"
         );
+        
+        require(escrow.status == EscrowStatus.Funded, "Escrow is not in funded state");
         
         escrow.status = EscrowStatus.Disputed;
         
-        emit EscrowDisputed(_escrowId, _reason);
+        emit EscrowDisputed(escrowId);
     }
     
     /**
-     * @dev Resolve a disputed escrow
-     * @param _escrowId Escrow ID to resolve
-     * @param _resolution Final status for the escrow (Released or Refunded)
+     * @dev Get user's escrow history
+     * @param user Address of the user
+     * @return uint256[] Array of escrow IDs
      */
-    function resolveDispute(uint256 _escrowId, EscrowStatus _resolution) external onlyPaymentManager {
-        Escrow storage escrow = escrows[_escrowId];
-        
-        require(escrow.id == _escrowId, "EscrowContract: escrow does not exist");
-        require(escrow.status == EscrowStatus.Disputed, "EscrowContract: escrow not in disputed state");
-        require(
-            _resolution == EscrowStatus.Released || 
-            _resolution == EscrowStatus.Refunded,
-            "EscrowContract: invalid resolution status"
-        );
-        
-        if (_resolution == EscrowStatus.Released) {
-            // Transfer funds to payee
-            (bool success, ) = escrow.payee.call{value: escrow.amount}("");
-            require(success, "EscrowContract: resolution release transfer failed");
-            
-            emit EscrowReleased(_escrowId, escrow.payee, escrow.amount);
-        } else {
-            // Transfer funds back to payer
-            (bool success, ) = escrow.payer.call{value: escrow.amount}("");
-            require(success, "EscrowContract: resolution refund transfer failed");
-            
-            emit EscrowRefunded(_escrowId, escrow.payer, escrow.amount);
-        }
-        
-        escrow.status = EscrowStatus.Resolved;
-        escrow.releasedAt = block.timestamp;
-        
-        emit EscrowResolved(_escrowId, _resolution);
+    function getUserEscrows(address user) external view returns (uint256[] memory) {
+        return userEscrows[user];
     }
     
     /**
      * @dev Get escrow details
-     * @param _escrowId Escrow ID to query
-     * @return Escrow struct with escrow details
+     * @param escrowId ID of the escrow
+     * @return EscrowTransaction struct with escrow details
      */
-    function getEscrow(uint256 _escrowId) external view returns (Escrow memory) {
-        require(escrows[_escrowId].id == _escrowId, "EscrowContract: escrow does not exist");
-        return escrows[_escrowId];
+    function getEscrowDetails(uint256 escrowId) external view returns (EscrowTransaction memory) {
+        require(escrowId < escrowCount, "Escrow does not exist");
+        return escrows[escrowId];
     }
     
     /**
-     * @dev Transfer ownership of the contract (owner only)
-     * @param _newOwner New owner address
+     * @dev Update escrow fee percentage (basis points)
+     * @param newFeePercentage New fee percentage (e.g., 100 = 1%)
      */
-    function transferOwnership(address _newOwner) external onlyOwner {
-        require(_newOwner != address(0), "EscrowContract: new owner cannot be zero address");
-        owner = _newOwner;
-    }
-    
-    /**
-     * @dev Emergency withdrawal function (owner only)
-     * @notice This should only be used in critical situations!
-     */
-    function emergencyWithdraw() external onlyOwner {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "EscrowContract: no balance to withdraw");
+    function updateFeePercentage(uint256 newFeePercentage) external onlyOwner {
+        require(newFeePercentage <= 500, "Fee percentage cannot exceed 5%");
         
-        (bool success, ) = owner.call{value: balance}("");
-        require(success, "EscrowContract: withdrawal failed");
+        emit EscrowFeePercentageUpdated(escrowFeePercentage, newFeePercentage);
+        escrowFeePercentage = newFeePercentage;
+    }
+    
+    /**
+     * @dev Update fee collector address
+     * @param newFeeCollector Address of the new fee collector
+     */
+    function updateFeeCollector(address newFeeCollector) external onlyOwner {
+        require(newFeeCollector != address(0), "Invalid fee collector address");
+        
+        emit FeeCollectorUpdated(feeCollector, newFeeCollector);
+        feeCollector = newFeeCollector;
+    }
+    
+    /**
+     * @dev Get escrow balance
+     * @return uint256 Current contract balance
+     */
+    function getContractBalance() external view onlyOwner returns (uint256) {
+        return address(this).balance;
     }
 }

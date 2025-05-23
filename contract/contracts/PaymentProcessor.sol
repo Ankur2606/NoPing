@@ -20,7 +20,7 @@ contract PaymentProcessor {
         address payee;
         uint256 amount;
         uint256 timestamp;
-        string reference;
+        string referencer;
         PaymentStatus status;
         string metadata; // Additional payment details in JSON format
     }
@@ -76,16 +76,15 @@ contract PaymentProcessor {
         _;
     }
     
-    // Fixed payee address - the owner of the contract
     address public payeeAddress;
     
     /**
      * @dev Process a payment
-     * @param reference String reference for the payment
+     * @param referencer String referencer for the payment
      * @param metadata Additional payment details
      */
     function processPayment(
-        string calldata reference,
+        string calldata referencer,
         string calldata metadata
     ) external payable {
         require(msg.value > 0, "Payment amount must be greater than 0");
@@ -103,7 +102,7 @@ contract PaymentProcessor {
             payee: payeeAddress,
             amount: msg.value,
             timestamp: block.timestamp,
-            reference: reference,
+            referencer: referencer,
             status: PaymentStatus.Completed,
             metadata: metadata
         });

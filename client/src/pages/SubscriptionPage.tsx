@@ -14,7 +14,7 @@ import { Container } from '@/components/ui/container';
 import { Layout } from '@/components/layout/Layout';
 import { subscriptionApi, paymentApi } from '@/services/api';
 import SubscriptionPlans from '@/components/payment/SubscriptionPlans';
-import BnbPayment from '@/components/payment/BnbPayment';
+import Web3Payment from '@/components/payment/Web3Payment';
 
 /**
  * Subscription management page
@@ -284,7 +284,7 @@ const endpoint = `${import.meta.env.VITE_API_BASE_URL}${currentSubscription ? '/
                   Complete your payment for {selectedPlan.tier} plan
                 </h2>
                 
-                <BnbPayment
+                <Web3Payment
                   amount={paymentAmount}
                   onPaymentSuccess={handlePaymentSuccess}
                   onPaymentError={(error) => console.error("Payment error:", error)}
