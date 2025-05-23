@@ -5,7 +5,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
-// import PaymentProcessorABI from '../../contracts/PaymentProcessor.json';
+import PaymentProcessorABI from '../contracts/PaymentProcessor.sol/PaymentProcessor.json'
 // Subscription functionality has been removed
 // import SubscriptionManagerABI from '../../contracts/SubscriptionManager.json';
 
@@ -90,6 +90,13 @@ const Web3Payment: React.FC<Web3PaymentProps> = ({
     } else {
       setError("MetaMask or compatible wallet not detected. Please install MetaMask to continue.");
     }
+  };
+
+  // Disconnect wallet
+  const disconnectWallet = () => {
+    setWalletConnected(false);
+    setUserAddress(null);
+    setError(null);
   };
 
   // Process direct payment
@@ -229,14 +236,24 @@ const Web3Payment: React.FC<Web3PaymentProps> = ({
                 </p>
               </div>
               
-              <Button 
-                onClick={processPayment}
-                className="w-full"
-                disabled={loading || success}
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {success ? 'Payment Successful' : `Pay ${amount} BNB`}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={processPayment}
+                  className="flex-1"
+                  disabled={loading || success}
+                >
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {success ? 'Payment Successful' : `Pay ${amount} BNB`}
+                </Button>
+                
+                <Button 
+                  onClick={disconnectWallet}
+                  variant="outline"
+                  disabled={loading}
+                >
+                  Disconnect
+                </Button>
+              </div>
             </div>
           )}
           

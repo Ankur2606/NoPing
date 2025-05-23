@@ -1,3 +1,20 @@
+const createGmailClient = (tokenData) => {
+    const oAuth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+    );
+
+    oAuth2Client.setCredentials({
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expiry_date: new Date(tokenData.expires_at._seconds * 1000).getTime()
+    });
+
+    return google.gmail({ version: 'v1', auth: oAuth2Client });
+};
+
+
 /**
  * Email Fetching and Processing Service
  * 
@@ -8,7 +25,7 @@
  * 4. Stores results in Firebase
  */
 
-const { classifyEmail } = require('./classifyEmail');
+const { classifyEmailToMessage } = require('./classifyEmailToMessage');
 const { parseEmailBody } = require('../utils/emailParser');
 
 /**
@@ -58,8 +75,8 @@ async function processEmail(gmail, emailId) {
     };
     
     // Classify the email
-    const priority = await classifyEmail(emailForClassification);
-
+    const priority = await classifyEmailToMessage(emailForClassification);
+    
     // Extract sender name and email
     const fromName = extractNameFromEmail(from);
     const fromEmail = extractEmailAddress(from);
@@ -87,8 +104,7 @@ async function processEmail(gmail, emailId) {
       'FLOW_ACTION': 'action',
       'FLOW_INFO': 'info'
     };
-    
-    // Create data object matching the Firebase schema with guaranteed values for all required fields
+
     return {
       // Required common fields with fallbacks
       type: 'email',
@@ -98,7 +114,6 @@ async function processEmail(gmail, emailId) {
       read: false, // Always false for new emails
       sourceId: emailId || `email-${Date.now()}`, // Fallback using timestamp if ID is missing
       
-      // Email-specific fields with fallbacks
       from: {
         name: fromName || 'Unknown Sender',
         email: fromEmail || 'unknown@example.com'
@@ -107,6 +122,7 @@ async function processEmail(gmail, emailId) {
       subject: subject || 'No Subject',
       attachments: Array.isArray(attachments) ? attachments : []
     };
+
   } catch (error) {
     console.error(`Error processing email ${emailId}:`, error);
     

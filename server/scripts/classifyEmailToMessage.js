@@ -25,7 +25,7 @@ const client = new OpenAI({
  * @param {string} email.body - Email body text
  * @returns {Promise<string>} - Returns classification label: FLOW_CRITICAL, FLOW_ACTION, or FLOW_INFO
  */
-async function classifyEmail(email) {
+async function classifyEmailToMessage(email) {
     try {
         // Create a comprehensive prompt with email metadata and content
         const emailContent = `
@@ -87,4 +87,4 @@ Respond ONLY with one of these labels: FLOW_CRITICAL, FLOW_ACTION, or FLOW_INFO.
     }
 }
 
-module.exports = { classifyEmail };
+module.exports = { classifyEmailToMessage };

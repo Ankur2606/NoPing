@@ -32,6 +32,7 @@ const createGmailClient = (tokenData) => {
  */
 const fetchUserEmails = async (userId, options = {}) => {
     try {
+
         // Get the user's Google OAuth token
         const tokenData = await getOAuthToken(userId, 'google');
 
@@ -65,24 +66,14 @@ const fetchUserEmails = async (userId, options = {}) => {
         }
 
         // Get full message details
-        const emails = await Promise.all(
-            response.data.messages.map(async (message) => {
-                try {
-                    return await processEmail(gmail, message.id);
-                } catch (error) {
-                    console.error(`Error fetching email details for ${message.id}:`, error);
-                    return null;
-                }
-            })
-        );
-
-        // Filter out any null results from failed fetches
-        const validEmails = emails.filter(email => email !== null);
+        const emails = response.data.messages
 
         return {
             success: true,
-            emails: validEmails
+            emails: emails,
+            gmailClient: gmail
         };
+
     } catch (error) {
         console.error(`Error fetching emails for user ${userId}:`, error);
         return {
@@ -99,10 +90,10 @@ const fetchUserEmails = async (userId, options = {}) => {
  * @param {Array} emails - Array of emails to save
  * @returns {Promise<Object>} - Result of the operation
  */
-const saveEmailsToFirestore = async (userId, emails) => {
+const saveEmailsToFirestore = async (userId, emailResults,tasksResults) => {
     try {
         // Validate inputs
-        if (!emails || emails.length === 0) {
+        if (!emailResults || emailResults.length === 0) {
             return {
                 success: false,
                 error: 'No emails provided',
@@ -115,7 +106,7 @@ const saveEmailsToFirestore = async (userId, emails) => {
         let savedCount = 0;
 
         // Process each email - ensure we're iterating through the actual emails array
-        for (const email of emails) {
+        for (const email of emailResults) {
             // Make sure email has a valid id
             if (!email || !email.sourceId) {
                 console.error('Invalid email object or missing ID:', email);
@@ -138,10 +129,49 @@ const saveEmailsToFirestore = async (userId, emails) => {
             await batch.commit();
         }
 
+
+         if (!emailResults || emailResults.length === 0) {
+            return {
+                success: false,
+                error: 'No emails provided',
+                savedCount: 0,
+                totalProcessed: 0
+            };
+        }
+        const batchTasks = db.batch();
+        const TasksRef = db.collection('tasks').doc(userId).collection('userTasks');
+        let TasksSavedCount = 0;
+
+        // Process each email - ensure we're iterating through the actual emails array
+        for (const task of tasksResults) {
+            // Make sure email has a valid id
+            if (!task || !task.sourceMessageId) {
+                console.error('Invalid email object or missing ID:', task);
+                continue;
+            }
+            
+            // Check if this email already exists
+            const taskDoc = await TasksRef.doc(task.sourceMessageId).get();
+
+            if (!taskDoc.exists) {
+                // Add email to batch if it doesn't exist yet
+                // Note: We're using the actual email object directly
+                batchTasks.set(TasksRef.doc(task.sourceMessageId), task);
+                TasksSavedCount++;
+            }
+        }
+
+        // Commit the batch if we have any new emails
+        if (TasksSavedCount > 0) {
+            await batch.commit();
+        }
+
         return {
             success: true,
             savedCount,
-            totalProcessed: emails.length
+            savedTasksCount: TasksSavedCount,
+            totalMessages: emailResults.length,
+            totalsTasks: tasksResults.length,
         };
     } catch (error) {
         console.error(`Error saving emails for user ${userId}:`, error);

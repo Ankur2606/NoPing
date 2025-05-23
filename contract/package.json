@@ -1,18 +1,17 @@
 {
-  "name": "flow-gen-sync-contract",
+  "name": "hardhat-project",
   "version": "1.0.0",
-  "type": "module",
-  "description": "Smart contracts for the flow-gen-sync project",
   "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test",
-    "deploy": "hardhat run scripts/deploy.js",
-    "list": "node scripts/list.js"
+    "test": "npx hardhat test",
+    "deploy-local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy-testnet": "npx hardhat run scripts/deploy.js --network bnbTestnet",
+    "deploy-mainnet": "npx hardhat run scripts/deploy.js --network bnbMainnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "hardhat": "^2.24.0"
   },
   "dependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
-    "dotenv": "^16.0.0",
-    "ethers": "^5.7.2",
-    "hardhat": "^2.14.0"
+    "dotenv": "^16.5.0"
   }
 }
