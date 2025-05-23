@@ -41,11 +41,11 @@ const processUserEmails = async (userId, tokenData) => {
     }
     const emailResults = [];
     const tasksResults = [];
-    for (const email of fetchResult.emails) {
+    for (const email of [fetchResult.emails[0]]) {
       const processedEmail =  await processEmail(fetchResult.gmailClient, email.id);
       emailResults.push(processedEmail);
-      // const taskResult = await generateTaskFromMessage(processedEmail);
-      // tasksResults.push(taskResult);
+      const taskResult = await generateTaskFromMessage(processedEmail);
+      tasksResults.push(taskResult);
     }
 
     // const saveResult = await saveEmailsToFirestore(userId, emailResults, tasksResults);
