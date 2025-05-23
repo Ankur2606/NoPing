@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { auth } from '../lib/firebase';
 import { Message, Task, ServiceConnection, UserPreferences } from './types';
+import { SUBSCRIPTION_TIERS, SUBSCRIPTION_STATUS, BILLING_PERIODS, PAYMENT_METHODS } from './subscriptionConstants';
 
 // User profile type
 export interface UserProfile {
@@ -23,6 +24,47 @@ interface TasksResponse {
   tasks: Task[];
   total: number;
   hasMore: boolean;
+}
+
+// Subscription related interfaces
+export interface Subscription {
+  id?: string;
+  userId?: string;
+  tier: string;
+  status: string;
+  startDate: string;
+  endDate: string | null;
+  billingPeriod: string;
+  autoRenew: boolean;
+  cancelAtPeriodEnd?: boolean;
+  paymentMethod?: string;
+  lastPaymentId?: string;
+  createdAt: string;
+  updatedAt: string;
+  features?: {
+    messageLimit: number;
+    taskLimit: number;
+    serviceLimit: number;
+    audioTranscriptions: boolean;
+    prioritySupport: boolean;
+    aiPrioritization: boolean;
+  };
+}
+
+export interface PaymentHistoryItem {
+  id: string;
+  userId?: string;
+  amount: number;
+  amountUsd: number;
+  currency: string;
+  status: string;
+  txHash?: string;
+  createdAt: string;
+  updatedAt: string;
+  paymentMethod: string;
+  paymentGateway?: string;
+  subscriptionId?: string;
+  metadata?: any;
 }
 
 // Base API URL - use environment variable or default to localhost
@@ -245,5 +287,229 @@ export const authApi = {
       console.error('Create profile error:', error);
       throw error;
     }
+  }
+};
+
+// Telegram API related functions
+export const telegramApi = {
+  // Get status of Telegram integration
+  getStatus: () => apiRequest('/telegram/link-status') as Promise<{
+    isLinked: boolean;
+    username?: string;
+  }>,
+  
+  // Generate a verification code to link a Telegram account
+  generateVerificationCode: () => apiRequest('/telegram/generate-code', {
+    method: 'POST'
+  }) as Promise<{
+    verificationCode: string;
+    expiresAt: string;
+  }>,
+  
+  // Verify a code sent by the user to the Telegram bot
+  verifyCode: (code: string) => apiRequest('/telegram/verify-code', {
+    method: 'POST',
+    body: JSON.stringify({ code })
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>,
+  
+  // Unlink Telegram account
+  unlinkAccount: () => apiRequest('/telegram/unlink', {
+    method: 'POST'
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>,
+  
+  // Send a test message to user's Telegram account
+  sendTestMessage: () => apiRequest('/telegram/test-message', {
+    method: 'POST'
+  }) as Promise<{
+    success: boolean;
+    error: string | null;
+  }>
+};
+
+// Subscription API related functions
+export const subscriptionApi = {
+  // Get current subscription
+  getCurrentSubscription: () => 
+    apiRequest('/subscriptions/current') as Promise<{
+      success: boolean, 
+      subscription: Subscription | null
+    }>,
+  
+  // Start a new subscription
+  startSubscription: (data: {
+    tier: string;
+    billingPeriod: string;
+    paymentMethod?: string;
+  }) => apiRequest('/subscriptions/start', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }) as Promise<{
+    success: boolean, 
+    subscription: Subscription | null,
+    price?: number,
+    requiresPayment: boolean
+  }>,
+  
+  // Change subscription tier
+  changeTier: (data: {
+    tier: string;
+    billingPeriod: string;
+    paymentMethod?: string;
+  }) => apiRequest('/subscriptions/change-tier', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }) as Promise<{
+    success: boolean, 
+    subscription: Subscription | null,
+    price?: number,
+    requiresPayment: boolean
+  }>,
+  
+  // Cancel subscription
+  cancelSubscription: (data?: {
+    cancelImmediately?: boolean
+  }) => apiRequest('/subscriptions/cancel', {
+    method: 'POST',
+    body: JSON.stringify(data || {})
+  }) as Promise<{
+    success: boolean, 
+    error: string | null
+  }>,
+  
+  // Get subscription pricing information
+  getSubscriptionPricing: () => apiRequest('/subscriptions/pricing') as Promise<{
+    success: boolean,
+    pricing: {
+      [tier: string]: {
+        [billingPeriod: string]: number
+      }
+    }
+  }>,
+  
+  // Get all subscription plans with detailed information
+  getSubscriptionPlans: () => apiRequest('/subscriptions/plans') as Promise<{
+    success: boolean,
+    plans: Array<{
+      id: string;
+      displayName: string;
+      description: string;
+      highlight: string;
+      features: {
+        messageLimit: number;
+        taskLimit: number;
+        serviceLimit: number;
+        audioTranscriptions: boolean;
+        prioritySupport: boolean;
+        aiPrioritization: boolean;
+      };
+      pricing: {
+        [billingPeriod: string]: {
+          bnb: number;
+          usd: number;
+        }
+      };
+      popular: boolean;
+    }>,
+    bnbPriceUsd: number
+  }>,
+  
+  // Get subscription history
+  getSubscriptionHistory: () => apiRequest('/subscriptions/history') as Promise<{
+    success: boolean,
+    subscriptions: Subscription[]
+  }>
+};
+
+// Payment API related functions
+export const paymentApi = {
+  // Create a BNB payment intent 
+  createBnbPaymentIntent: (data: {
+    amount: number;
+    amountUsd: number;
+    subscriptionId?: string;
+    tier?: string;
+    billingPeriod?: string;
+    metadata?: any;
+  }) => apiRequest('/payments/bnb/create', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }) as Promise<{
+    success: boolean,
+    payment: {
+      id: string;
+      [key: string]: any;
+    },
+    walletAddress: string,
+    error: string | null
+  }>,
+  
+  // Create a NOWPayments payment
+  createNowPayment: (data: {
+    amountUsd: number;
+    currency?: string;
+    subscriptionId?: string;
+    tier?: string;
+    billingPeriod?: string;
+    metadata?: any;
+  }) => apiRequest('/payments/nowpayments/create', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }) as Promise<{
+    success: boolean,
+    payment: {
+      id: string;
+      [key: string]: any;
+    },
+    paymentUrl: string,
+    error: string | null
+  }>,
+  
+  // Verify a BNB payment
+  verifyBnbPayment: (data: {
+    paymentId: string;
+    txHash: string;
+  }) => apiRequest('/payments/bnb/verify', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }) as Promise<{
+    success: boolean,
+    verified: boolean,
+    error: string | null
+  }>,
+  
+  // Get payment details
+  getPaymentDetails: (paymentId: string) => apiRequest(`/payments/${paymentId}`) as Promise<{
+    success: boolean,
+    payment: PaymentHistoryItem
+  }>,
+  
+  // Get payment history
+  getPaymentHistory: (params?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+    
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/payments/history?${queryString}` : '/payments/history';
+    
+    return apiRequest(endpoint) as Promise<{
+      success: boolean,
+      payments: PaymentHistoryItem[],
+      total: number,
+      hasMore: boolean
+    }>;
   }
 };

@@ -6,18 +6,32 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "init-db": "node scripts/initFirebaseCollections.js"
+    "init-db": "node scripts/initFirebaseCollections.js",
+    "compile-contracts": "mkdir -p build && solcjs --bin --abi --include-path node_modules/ --base-path . -o build contracts/*.sol",
+    "deploy-contracts": "node scripts/deployContracts.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "FlowSync backend server with Firebase integration",
   "dependencies": {
+    "axios": "^1.9.0",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
     "firebase-admin": "^11.11.0",
-    "server": "file:"
+    "googleapis": "^149.0.0",
+    "node-cron": "^4.0.6",
+    "node-fetch": "^2.7.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^4.102.0",
+    "querystring": "^0.2.1",
+    "server": "file:",
+    "solc": "^0.8.17",
+    "truffle-hdwallet-provider": "^1.0.17",
+    "web3": "^1.10.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

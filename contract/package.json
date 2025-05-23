@@ -1,0 +1,18 @@
+{
+  "name": "flow-gen-sync-contract",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Smart contracts for the flow-gen-sync project",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js",
+    "list": "node scripts/list.js"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "dotenv": "^16.0.0",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.14.0"
+  }
+}

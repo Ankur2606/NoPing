@@ -21,8 +21,9 @@ export default function AuthPage() {
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
+      // First authenticate with Firebase
       const { user, error } = await signInWithGoogle();
-      
+
       if (error) {
         console.error("Google sign in error:", error);
         toast({
@@ -33,13 +34,48 @@ export default function AuthPage() {
         setIsGoogleLoading(false);
         return;
       }
-      
+
       if (user) {
         toast({
           title: "Successfully signed in",
           description: `Welcome ${user.displayName || user.email}!`
         });
-        handleAuthSuccess();
+        console.log("User signed in:", user);
+
+        // Check if we need to proceed with additional OAuth for email access
+        try {
+          console.log("pappu", await user.getIdToken())
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/token/google`, {
+            headers: {
+              Authorization: `Bearer ${await user.getIdToken()}`,
+              'cache-control': 'no-cache',
+              'Content-Type': 'application/json'
+            }
+          });
+
+          console.log("Response from token check:", response);
+          const tokenData = await response.json();
+
+          // If we don't have Gmail access, redirect to OAuth flow
+          if (!response.ok || !tokenData.hasEmailAccess) {
+            console.log("Need additional Gmail permissions, redirecting to OAuth flow...");
+
+            // Get the OAuth URL from our backend
+            const authUrlResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google-auth-url`);
+            const { authUrl } = await authUrlResponse.json();
+            console.log("OAuth URL:", authUrl);
+            // Redirect the user to Google's consent page
+            window.location.href = authUrl;
+            return;
+          }
+
+          // If we already have correct permissions, complete authentication
+          handleAuthSuccess();
+        } catch (apiError) {
+          console.error("API error checking token status:", apiError);
+          // Still allow login even if API check fails
+          // handleAuthSuccess();
+        }
       }
     } catch (err) {
       console.error("Unexpected error during Google sign in:", err);
@@ -88,9 +124,9 @@ export default function AuthPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <Button 
-            variant="outline" 
-            className="w-full" 
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading}
           >
