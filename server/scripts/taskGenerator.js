@@ -16,9 +16,9 @@ const client = new OpenAI({
 });
 
 /**
- * Main function to generate a task from a message
+ * Main function to analyze a message and determine if a task should be generated
  * @param {Object} message - Message object following the message schema
- * @returns {Promise<Object>} - Task object following the task schema
+ * @returns {Promise<Object>} - Response object with isGenerateTask flag and task object(s) if needed
  */
 async function generateTaskFromMessage(message) {
     try {
@@ -30,29 +30,72 @@ async function generateTaskFromMessage(message) {
         // Extract key information based on message type
         const sourceInfo = extractSourceInfo(message);
 
-        // Generate task content using AI
-        const taskContent = await generateTaskContentWithAI(message);
+        // Generate task content using AI and determine if task is needed
+        const aiResult = await generateTaskContentWithAI(message);
 
-        // Merge the AI-generated content with basic task information
-        const task = {
-            title: taskContent.title || generateDefaultTitle(message),
-            description: taskContent.description || generateDefaultDescription(message),
-            dueDate: taskContent.dueDate || calculateDefaultDueDate(),
-            createdOn: new Date(),
-            priority: taskContent.priority || "medium",
-            completed: false,
-            source: message.type,
-            sourceMessageId: message.sourceId || "",
-            tags: taskContent.tags || generateDefaultTags(message),
-            assignedTo: []
-        };
+        // If AI determines no task is needed, return early with isGenerateTask = false
+        if (!aiResult.isGenerateTask) {
+            return {
+                isGenerateTask: false
+            };
+        }
 
-        return task;
+        // Check if we have multiple tasks or a single task
+        if (aiResult.generateTask && aiResult.generateTask.isMultiple === true) {
+            // Handle multiple tasks case
+            const taskList = (aiResult.generateTask.task || []).map(taskContent => {
+                return {
+                    title: taskContent.title || generateDefaultTitle(message),
+                    description: taskContent.description || generateDefaultDescription(message),
+                    dueDate: taskContent.dueDate || calculateDefaultDueDate(),
+                    createdOn: new Date(),
+                    priority: taskContent.priority || "medium",
+                    completed: false,
+                    source: message.type,
+                    sourceMessageId: message.sourceId || "",
+                    tags: taskContent.tags || generateDefaultTags(message),
+                    assignedTo: []
+                };
+            });
+
+            return {
+                isGenerateTask: true,
+                isMultiple: true,
+                tasks: taskList
+            };
+        } else {
+            // Handle single task case
+            const taskContent = aiResult.generateTask && aiResult.generateTask.task || {};
+
+            const task = {
+                title: taskContent.title || generateDefaultTitle(message),
+                description: taskContent.description || generateDefaultDescription(message),
+                dueDate: taskContent.dueDate || calculateDefaultDueDate(),
+                createdOn: new Date(),
+                priority: taskContent.priority || "medium",
+                completed: false,
+                source: message.type,
+                sourceMessageId: message.sourceId || "",
+                tags: taskContent.tags || generateDefaultTags(message),
+                assignedTo: []
+            };
+
+            return {
+                isGenerateTask: true,
+                isMultiple: false,
+                task: task
+            };
+        }
     } catch (error) {
         console.error('Error generating task from message:', error);
 
-        // Return a default task on error
-        return createDefaultErrorTask(message);
+        // Return a default task on error, marking it as requiring attention
+        const errorTask = createDefaultErrorTask(message);
+        return {
+            isGenerateTask: true,
+            isMultiple: false,
+            task: errorTask
+        };
     }
 }
 
@@ -153,7 +196,7 @@ function prepareContextForAI(message) {
 function buildAIPrompt(context) {
     // Building a detailed prompt to get quality task generation
     return `
-You are an AI assistant specialized in turning communication messages into actionable tasks.
+You are an AI assistant specialized in analyzing communication messages and determining if they should be converted into actionable tasks.
 
 CONTEXT:
 - Message Type: ${context.messageType}
@@ -166,20 +209,81 @@ ${context.hasMentions !== undefined ? `- Has Mentions: ${context.hasMentions}` :
 CONTENT:
 ${context.content}
 
-Based on this message, create a task with the following attributes:
-1. Title: A clear, concise title for the task (max 100 characters)
-2. Description: Detailed description of what needs to be done
-3. Priority: "high", "medium", or "low" (consider the urgency and importance)
-4. Tags: 1-5 relevant keywords that categorize this task
-5. Due Date: Suggested due date in ISO format (YYYY-MM-DD) or null if no date is implied
+TASK EVALUATION GUIDELINES:
+First, evaluate whether this message should be converted into a task. A message should become a task if it:
+1. Contains an explicit or implicit request for action
+2. Requires follow-up or response from the recipient
+3. Represents work that needs to be tracked or completed
+4. Includes deadlines, commitments, or deliverables
+5. Is marked as important/high priority by the sender
+
+Messages that should NOT become tasks typically:
+1. Are purely informational with no action required
+2. Are casual conversation or greetings
+3. Are automated notifications without actionable content
+4. Are already completed/resolved issues
+5. Are spam or promotional content
+
+MULTIPLE TASKS ANALYSIS:
+After determining if a task should be created, analyze if the message contains MULTIPLE distinct actionable items. Examples:
+- "Please review the report, schedule a meeting with the team, and update the dashboard"
+- "Need three things: 1) Complete the design, 2) Send me the files, 3) Call the client"
+- "Fix bugs in login page AND update color scheme on homepage AND deploy to production"
+
+If separate tasks are clearly identifiable, create MULTIPLE atomic tasks instead of one large task.
+
+TASK CREATION GUIDELINES:
+- Create ATOMIC tasks (single focused action per task)
+- Keep titles brief and action-oriented (start with a verb)
+- Focus on the specific action required, not lengthy descriptions
+- Prioritize based on urgency and importance
+- Include only relevant tags (1-3 tags maximum)
+- Specify due dates only if clearly indicated in the message
 
 Respond in JSON format only:
+If NO task should be generated:
 {
-  "title": "Task title",
-  "description": "Task description",
-  "priority": "high|medium|low",
-  "tags": ["tag1", "tag2"],
-  "dueDate": "YYYY-MM-DD" or null
+  "isGenerateTask": false
+}
+
+If a SINGLE atomic task should be generated:
+{
+  "isGenerateTask": true,
+  "generateTask": {
+    "isMultiple": false,
+    "task": {
+      "title": "Brief action-oriented title",
+      "description": "Concise description of what needs to be done",
+      "priority": "high|medium|low",
+      "tags": ["tag1", "tag2"],
+      "dueDate": "YYYY-MM-DD" or null
+    }
+  }
+}
+
+If MULTIPLE tasks should be generated:
+{
+  "isGenerateTask": true,
+  "generateTask": {
+    "isMultiple": true,
+    "task": [
+      {
+        "title": "First atomic task title",
+        "description": "Concise description",
+        "priority": "high|medium|low",
+        "tags": ["tag1", "tag2"],
+        "dueDate": "YYYY-MM-DD" or null
+      },
+      {
+        "title": "Second atomic task title",
+        "description": "Concise description",
+        "priority": "high|medium|low",
+        "tags": ["tag1", "tag2"],
+        "dueDate": "YYYY-MM-DD" or null
+      }
+      // Additional tasks as needed
+    ]
+  }
 }
 `;
 }
@@ -193,17 +297,17 @@ async function callNebiusAI(prompt) {
   try {
     const response = await client.chat.completions.create({
         model: "Qwen/Qwen2.5-32B-Instruct",
-        max_tokens: 200,
+        max_tokens: 500,
         temperature: 0,
         messages: [
             {
-            role: "system",
-            content: 'You are a professional task creation assistant that creates structured tasks from message content.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
+                role: "system",
+                content: 'You are a professional assistant that analyzes messages and determines if they should become tasks. You can differentiate between actionable requests and informational messages. You provide structured JSON responses only.'
+            },
+            {
+                role: 'user',
+                content: prompt
+            }
         ]
       }
     );
@@ -218,7 +322,7 @@ console.log('AI Response:', response.choices[0].message);
 /**
  * Parse the AI response into structured task content
  * @param {String} response - AI response text
- * @returns {Object} - Parsed task content
+ * @returns {Object} - Parsed task content with isGenerateTask flag and nested generateTask object if needed
  */
 function parseAIResponse(response) {
   try {
@@ -227,25 +331,112 @@ function parseAIResponse(response) {
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     
     if (jsonMatch) {
-      const taskContent = JSON.parse(jsonMatch[0]);
+      const parsedContent = JSON.parse(jsonMatch[0]);
       
-      // Convert date string to Date object if present
-      if (taskContent.dueDate && typeof taskContent.dueDate === 'string') {
-        const dateObj = new Date(taskContent.dueDate);
-        if (!isNaN(dateObj.getTime())) {
-          taskContent.dueDate = dateObj;
-        } else {
-          taskContent.dueDate = null;
+      // Handle the isGenerateTask property, default to true if not present for backward compatibility
+      if (parsedContent.isGenerateTask === undefined) {
+        parsedContent.isGenerateTask = true;
+        
+        // If using older formats, migrate to new format
+        if (!parsedContent.generateTask) {
+          // Create the generateTask structure
+          parsedContent.generateTask = {
+            isMultiple: false,
+            task: {}
+          };
+          
+          // If old format had direct task properties, move them to task object
+          if (parsedContent.title || parsedContent.description) {
+            parsedContent.generateTask.task = {
+              title: parsedContent.title,
+              description: parsedContent.description,
+              priority: parsedContent.priority,
+              tags: parsedContent.tags,
+              dueDate: parsedContent.dueDate
+            };
+            
+            // Delete the old properties
+            delete parsedContent.title;
+            delete parsedContent.description;
+            delete parsedContent.priority;
+            delete parsedContent.tags;
+            delete parsedContent.dueDate;
+          }
+        }
+        // Handle intermediary format where task properties were directly under generateTask
+        else if (parsedContent.generateTask && !parsedContent.generateTask.task && 
+                 (parsedContent.generateTask.title || parsedContent.generateTask.description)) {
+          const taskContent = {
+            title: parsedContent.generateTask.title,
+            description: parsedContent.generateTask.description,
+            priority: parsedContent.generateTask.priority,
+            tags: parsedContent.generateTask.tags,
+            dueDate: parsedContent.generateTask.dueDate
+          };
+          
+          // Set isMultiple to false by default
+          parsedContent.generateTask.isMultiple = false;
+          // Add task under the task property
+          parsedContent.generateTask.task = taskContent;
+          
+          // Delete the old direct properties
+          delete parsedContent.generateTask.title;
+          delete parsedContent.generateTask.description;
+          delete parsedContent.generateTask.priority;
+          delete parsedContent.generateTask.tags;
+          delete parsedContent.generateTask.dueDate;
         }
       }
       
-      return taskContent;
+      // Make sure isMultiple is defined
+      if (parsedContent.isGenerateTask && parsedContent.generateTask && 
+          parsedContent.generateTask.isMultiple === undefined) {
+        parsedContent.generateTask.isMultiple = false;
+      }
+      
+      // Process due dates for all tasks
+      if (parsedContent.isGenerateTask && parsedContent.generateTask) {
+        if (parsedContent.generateTask.isMultiple && Array.isArray(parsedContent.generateTask.task)) {
+          // Process due dates for multiple tasks
+          parsedContent.generateTask.task.forEach(task => {
+            if (task.dueDate && typeof task.dueDate === 'string') {
+              const dateObj = new Date(task.dueDate);
+              if (!isNaN(dateObj.getTime())) {
+                task.dueDate = dateObj;
+              } else {
+                task.dueDate = null;
+              }
+            }
+          });
+        } 
+        else if (!parsedContent.generateTask.isMultiple && parsedContent.generateTask.task) {
+          // Process due date for a single task
+          const task = parsedContent.generateTask.task;
+          if (task.dueDate && typeof task.dueDate === 'string') {
+            const dateObj = new Date(task.dueDate);
+            if (!isNaN(dateObj.getTime())) {
+              task.dueDate = dateObj;
+            } else {
+              task.dueDate = null;
+            }
+          }
+        }
+      }
+      
+      return parsedContent;
     }
     
     throw new Error('Could not extract valid JSON from AI response');
   } catch (error) {
     console.error('Error parsing AI response:', error);
-    return {}; // Return empty object, defaults will be used
+    // Return object with isGenerateTask true as fallback
+    return { 
+      isGenerateTask: true,
+      generateTask: {
+        isMultiple: false,
+        task: {}
+      }
+    }; 
   }
 }
 
