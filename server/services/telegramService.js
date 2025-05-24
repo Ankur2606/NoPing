@@ -83,19 +83,20 @@ class TelegramService {
       }
     });
     
-    // Handle /verify command for secure verification
-    this.bot.onText(/\/verify (.+)/, async (msg, match) => {
+    // Handle /verify command for secure verification with both code and email
+    this.bot.onText(/\/verify\s+(\S+)\s+(\S+@\S+)/, async (msg, match) => {
       try {
         const chatId = msg.chat.id;
         const telegramId = msg.from.id;
         const username = msg.from.username;
         const code = match[1].trim();
+        const email = match[2].trim();
         
-        console.log(`Verifying code: ${code} for user: ${username} (ID: ${telegramId})`);
+        console.log(`Verifying code: ${code} for user: ${username} (ID: ${telegramId}) with email: ${email}`);
         
         try {
-          // Use the helper function directly
-          const result = await verifyAndLinkTelegramAccount(code, telegramId, chatId, username);
+          // Use the helper function with email parameter
+          const result = await verifyAndLinkTelegramAccount(code, telegramId, chatId, username, email);
           
           if (result.success) {
             this.bot.sendMessage(
@@ -124,13 +125,15 @@ class TelegramService {
       }
     });
     
-    // Handle /help command
+
+    // Update help command to include the new verification format
     this.bot.onText(/\/help/, (msg) => {
       const helpText = 
         "🤖 *FlowSync Telegram Bot* 🤖\n\n" +
         "Available commands:\n\n" +
         "/start - Subscribe to notifications\n" +
         "/verify CODE - Link your account using a verification code from the web app\n" +
+        "/verify CODE EMAIL - Link your account using a verification code and email\n" +
         "/status - Check your account linkage status\n" +
         "/help - Show this help message\n\n" +
         "Once linked, you'll receive notifications and audio files from FlowSync.";

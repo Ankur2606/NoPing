@@ -13,9 +13,9 @@ const { db, admin } = require('../config/firebase');
  * @param {String} username - The Telegram username (optional)
  * @returns {Promise<Object>} - Result of the verification
  */
-const verifyAndLinkTelegramAccount = async (code, telegramId, chatId, username) => {
+const verifyAndLinkTelegramAccount = async (code, telegramId, chatId, username, email) => {
   try {
-    if (!code || !telegramId || !chatId) {
+    if (!code || !telegramId || !chatId || !email) {
       return { 
         success: false,
         error: 'Code, telegramId and chatId are required'
@@ -28,6 +28,13 @@ const verifyAndLinkTelegramAccount = async (code, telegramId, chatId, username) 
       return { 
         success: false,
         error: 'Invalid verification code'
+      };
+    }
+
+    if( verification.email !== email) {
+      return { 
+        success: false,
+        error: 'Code is not valid for this email'
       };
     }
     
