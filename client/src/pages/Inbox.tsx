@@ -10,24 +10,7 @@ import { messagesApi } from "@/services/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from 'react-router-dom';
-
-// Helper function to format dates
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.round(diffMs / 60000);
-  const diffHours = Math.round(diffMins / 60);
-  const diffDays = Math.round(diffHours / 24);
-  
-  if (diffMins < 60) {
-    return `${diffMins}m ago`;
-  } else if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  } else {
-    return `${diffDays}d ago`;
-  }
-};
+import { formatTimeAgo } from "@/lib/utils";
 
 // Helper function to get source icon
 const getSourceIcon = (message: Message) => {
@@ -214,16 +197,25 @@ const Inbox = () => {
         priority: selectedMessage.priority === 'critical' ? 'high' : 
                  selectedMessage.priority === 'action' ? 'medium' : 'low'
       });
+
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive"
+        });
+        return;
+      }
       
       toast({
         title: "Success",
         description: "Message converted to task successfully"
       });
     } catch (err) {
-      console.error("Error converting message to task:", err);
+      console.error("Error converting message to task:", err.message);
       toast({
         title: "Error",
-        description: "Failed to convert message to task",
+        description: err.message,
         variant: "destructive"
       });
     }
@@ -372,7 +364,7 @@ const Inbox = () => {
                               {sender}
                             </span>
                             <span className="ml-auto text-xs text-muted-foreground">
-                              {formatDate(message.timestamp)}
+                              {formatTimeAgo(message.timestamp)}
                             </span>
                           </div>
                           <div className="font-medium text-sm mt-1">{subject}</div>
@@ -401,7 +393,7 @@ const Inbox = () => {
                           {getMessageSubject(selectedMessage)}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
-                          From: {getMessageSender(selectedMessage)} • {formatDate(selectedMessage.timestamp)}
+                          From: {getMessageSender(selectedMessage)} • {formatTimeAgo(selectedMessage.timestamp)}
                         </p>
                       </div>
                       <div className="flex gap-2">

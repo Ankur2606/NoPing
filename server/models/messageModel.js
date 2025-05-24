@@ -9,7 +9,8 @@ const baseMessageStructure = {
   timestamp: null, // Will be set to admin.firestore.FieldValue.serverTimestamp()
   priority: "info", // "critical" | "action" | "info"
   read: false,
-  sourceId: ""
+  sourceId: "",
+  messageTimestamp: null, // Timestamp of the original message
 };
 
 // Email specific message fields

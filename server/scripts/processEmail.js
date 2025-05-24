@@ -120,7 +120,8 @@ async function processEmail(gmail, emailId) {
       },
       to: Array.isArray(toArray) ? toArray : [],
       subject: subject || 'No Subject',
-      attachments: Array.isArray(attachments) ? attachments : []
+      attachments: Array.isArray(attachments) ? attachments : [],
+      messageTimestamp: new Date(date)
     };
 
   } catch (error) {

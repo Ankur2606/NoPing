@@ -9,14 +9,19 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 
 // Helper function to format dates
-const formatTimeAgo = (dateString: string) => {
-  const date = new Date(dateString);
+type FirestoreTimestamp = {
+  _seconds: number;
+  _nanoseconds: number;
+};
+
+const formatTimeAgo = (timestamp: FirestoreTimestamp) => {
+  const date = new Date(timestamp._seconds * 1000); // Convert to JavaScript Date
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.round(diffMs / 60000);
   const diffHours = Math.round(diffMins / 60);
   const diffDays = Math.round(diffHours / 24);
-  
+  console.log('timestamp:', timestamp);
   if (diffMins < 60) {
     return `${diffMins}m ago`;
   } else if (diffHours < 24) {
@@ -25,6 +30,7 @@ const formatTimeAgo = (dateString: string) => {
     return `${diffDays}d ago`;
   }
 };
+
 
 // Helper function to get sender name from different message types
 const getMessageSender = (message: Message): string => {

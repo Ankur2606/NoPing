@@ -4,7 +4,6 @@
  * Analyzes messages from various sources (email, Slack, Teams) and generates appropriate tasks.
  * Uses AI to extract relevant task information from message content.
  */
-
 const axios = require('axios');
 require('dotenv').config();
 const { OpenAI } = require('openai');
@@ -44,16 +43,22 @@ async function generateTaskFromMessage(message) {
         if (aiResult.generateTask && aiResult.generateTask.isMultiple === true) {
             // Handle multiple tasks case
             const taskList = (aiResult.generateTask.task || []).map(taskContent => {
+                // Ensure date is properly formatted for Firestore
+                const dueDate = taskContent.dueDate ? 
+                    (taskContent.dueDate instanceof Date ? 
+                        taskContent.dueDate : new Date(taskContent.dueDate)) : 
+                    calculateDefaultDueDate();
+                
                 return {
                     title: taskContent.title || generateDefaultTitle(message),
                     description: taskContent.description || generateDefaultDescription(message),
-                    dueDate: taskContent.dueDate || calculateDefaultDueDate(),
+                    dueDate: dueDate,
                     createdOn: new Date(),
                     priority: taskContent.priority || "medium",
                     completed: false,
                     source: message.type,
                     sourceMessageId: message.sourceId || "",
-                    tags: taskContent.tags || generateDefaultTags(message),
+                    tags: Array.isArray(taskContent.tags) ? taskContent.tags : generateDefaultTags(message),
                     assignedTo: []
                 };
             });
@@ -66,24 +71,30 @@ async function generateTaskFromMessage(message) {
         } else {
             // Handle single task case
             const taskContent = aiResult.generateTask && aiResult.generateTask.task || {};
+            
+            // Ensure date is properly formatted for Firestore
+            const dueDate = taskContent.dueDate ? 
+                (taskContent.dueDate instanceof Date ? 
+                    taskContent.dueDate : new Date(taskContent.dueDate)) : 
+                calculateDefaultDueDate();
 
             const task = {
                 title: taskContent.title || generateDefaultTitle(message),
                 description: taskContent.description || generateDefaultDescription(message),
-                dueDate: taskContent.dueDate || calculateDefaultDueDate(),
+                dueDate: dueDate,
                 createdOn: new Date(),
                 priority: taskContent.priority || "medium",
                 completed: false,
                 source: message.type,
                 sourceMessageId: message.sourceId || "",
-                tags: taskContent.tags || generateDefaultTags(message),
+                tags: Array.isArray(taskContent.tags) ? taskContent.tags : generateDefaultTags(message),
                 assignedTo: []
             };
 
             return {
                 isGenerateTask: true,
                 isMultiple: false,
-                task: task
+                tasks: task
             };
         }
     } catch (error) {
@@ -238,6 +249,7 @@ TASK CREATION GUIDELINES:
 - Focus on the specific action required, not lengthy descriptions
 - Prioritize based on urgency and importance
 - Include only relevant tags (1-3 tags maximum)
+- Assume todays date as ${new Date()} to generate due dates like tomorrow use ${new Date(new Date().getTime() + 24 * 60 * 60 * 1000)} etc.
 - Specify due dates only if clearly indicated in the message
 
 Respond in JSON format only:
@@ -311,7 +323,6 @@ async function callNebiusAI(prompt) {
         ]
       }
     );
-console.log('AI Response:', response.choices[0].message);
     return response.choices[0].message.content.trim();
   } catch (error) {
     console.error('Error calling Nebius AI API:', error.message);
@@ -326,7 +337,6 @@ console.log('AI Response:', response.choices[0].message);
  */
 function parseAIResponse(response) {
   try {
-    console.log('AI Response:', response);
     // Extract JSON from response (in case there's additional text)
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     

@@ -2,7 +2,7 @@ const { google } = require('googleapis');
 const { admin, db } = require('../config/firebase');
 const { getOAuthToken } = require('../models/oauthTokenModel');
 const { processEmail } = require('../scripts/processEmail');
-
+const logger = require('../utils/logger');
 /**
  * Create a Gmail API client with user's access token
  * @param {Object} tokenData - OAuth token data
@@ -90,8 +90,9 @@ const fetchUserEmails = async (userId, options = {}) => {
  * @param {Array} emails - Array of emails to save
  * @returns {Promise<Object>} - Result of the operation
  */
-const saveEmailsToFirestore = async (userId, emailResults,tasksResults) => {
+const saveEmailsToFirestore = async (userId, emailResults, tasksResults) => {
     try {
+        logger.info(`Saving ${emailResults.length} emails and ${tasksResults.length} for user`);
         // Validate inputs
         if (!emailResults || emailResults.length === 0) {
             return {
@@ -112,7 +113,7 @@ const saveEmailsToFirestore = async (userId, emailResults,tasksResults) => {
                 console.error('Invalid email object or missing ID:', email);
                 continue;
             }
-            
+
             // Check if this email already exists
             const emailDoc = await messagesRef.doc(email.sourceId).get();
 
@@ -130,40 +131,38 @@ const saveEmailsToFirestore = async (userId, emailResults,tasksResults) => {
         }
 
 
-         if (!emailResults || emailResults.length === 0) {
+        if (!tasksResults || tasksResults.length === 0) {
             return {
-                success: false,
-                error: 'No emails provided',
-                savedCount: 0,
-                totalProcessed: 0
+                success: true,
+                savedCount,
+                savedTasksCount: 0,
+                totalMessages: emailResults.length,
+                totalsTasks: tasksResults.length
             };
         }
+
+        console.log(`Saving tasks`, tasksResults);
         const batchTasks = db.batch();
         const TasksRef = db.collection('tasks').doc(userId).collection('userTasks');
         let TasksSavedCount = 0;
 
         // Process each email - ensure we're iterating through the actual emails array
         for (const task of tasksResults) {
+            console.log(`Processing task`, task.sourceMessageId);
             // Make sure email has a valid id
             if (!task || !task.sourceMessageId) {
                 console.error('Invalid email object or missing ID:', task);
                 continue;
             }
-            
-            // Check if this email already exists
-            const taskDoc = await TasksRef.doc(task.sourceMessageId).get();
+            const newDocRef = TasksRef.doc(); // random ID
 
-            if (!taskDoc.exists) {
-                // Add email to batch if it doesn't exist yet
-                // Note: We're using the actual email object directly
-                batchTasks.set(TasksRef.doc(task.sourceMessageId), task);
-                TasksSavedCount++;
-            }
+            batchTasks.set(newDocRef, task);
+            TasksSavedCount++;
         }
 
         // Commit the batch if we have any new emails
         if (TasksSavedCount > 0) {
-            await batch.commit();
+            await batchTasks.commit();
         }
 
         return {

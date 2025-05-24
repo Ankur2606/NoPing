@@ -50,9 +50,9 @@ const Dashboard = () => {
         </div>
         
         {/* Demo component for client-server integration */}
-        <div className="mt-6">
+        {/* <div className="mt-6">
           <MessagesDataLoader />
-        </div>
+        </div> */}
       </div>
     </Layout>
   );

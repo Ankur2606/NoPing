@@ -4,6 +4,7 @@ const { fetchUserEmails, saveEmailsToFirestore } = require('../services/emailSer
 const { classifyEmailToMessage } = require('./classifyEmailToMessage');
 const { generateTaskFromMessage } = require('./taskGenerator');
 const { processEmail } = require('./processEmail');
+const { db } = require('../config/firebase');
 
 // Log messages with timestamp
 const log = (message) => {
@@ -18,7 +19,7 @@ const processUserEmails = async (userId, tokenData) => {
 
     // Fetch recent emails (adjust query as needed)
     const fetchResult = await fetchUserEmails(userId, {
-      maxResults: 20,
+      maxResults: 5,
       query: 'is:inbox newer_than:7d' // Get inbox emails from last 7 days
     });
 
@@ -41,18 +42,40 @@ const processUserEmails = async (userId, tokenData) => {
     }
     const emailResults = [];
     const tasksResults = [];
-    for (const email of [fetchResult.emails[0]]) {
+    let count = 0;
+    const messagesRef = db.collection('messages').doc(userId).collection('userMessages');
+
+    for (const email of fetchResult.emails) {
+      const isEmailProcessed = await messagesRef.doc(email.id).get();
+      if (isEmailProcessed.exists) {
+        log(`Email ${email.id} already processed for user ${userId}, skipping...`);
+        continue; // Skip already processed emails
+      }
+  
       const processedEmail =  await processEmail(fetchResult.gmailClient, email.id);
       emailResults.push(processedEmail);
       const taskResult = await generateTaskFromMessage(processedEmail);
-      tasksResults.push(taskResult);
-    }
+      if(taskResult.isGenerateTask){
+        if(taskResult.isMultiple){
+          tasksResults.push(...taskResult.tasks);
+        }else{
+          tasksResults.push(taskResult.tasks);
+        }
+      }
 
-    // const saveResult = await saveEmailsToFirestore(userId, emailResults, tasksResults);
-const saveResult ={
-  success: true,
-  savedCount: 'shdgc',
-}
+      log(`Processed email ${count + 1}/${fetchResult.emails.length} for user ${userId}`);
+      count++;
+    }
+   if(emailResults.length === 0) {
+      log(`No new emails to save for user ${userId}`);
+      return {
+        success: true,
+        savedCount: 0,
+        fetchedCount: fetchResult.emails.length
+      };
+   }
+    const saveResult = await saveEmailsToFirestore(userId, emailResults, tasksResults);
+
     if (!saveResult.success) {
       log(`Failed to save emails for user ${userId}: ${saveResult.error}`);
       return {

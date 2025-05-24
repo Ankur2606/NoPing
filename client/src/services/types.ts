@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // General message types
 export interface BaseMessage {
   id: string;
   content: string;
-  timestamp: string;
+  timestamp: any;
   priority?: "critical" | "action" | "info";
   read?: boolean;
 }
