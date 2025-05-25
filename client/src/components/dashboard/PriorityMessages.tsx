@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { messagesApi } from "@/services/api";
 import { Message } from "@/services/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { MessageDetailsDialog } from "@/components/MessageDetailsDialog";
 
 // Helper function to format dates
 type FirestoreTimestamp = {
@@ -71,6 +72,8 @@ export function PriorityMessages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const priorityIcons = {
     critical: "🔴",
@@ -163,6 +166,18 @@ export function PriorityMessages() {
     }
   };
   
+  // Handle opening message details dialog
+  const handleViewDetails = (messageId: string) => {
+    setSelectedMessageId(messageId);
+    setIsDialogOpen(true);
+  };
+
+  // Handle closing message details dialog
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedMessageId(null);
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -231,6 +246,15 @@ export function PriorityMessages() {
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/inbox?message=${message.id}`}>View</a>
                   </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewDetails(message.id)}
+                    className="gap-1"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Details
+                  </Button>
                   {!message.read && (
                     <Button 
                       variant="ghost" 
@@ -246,6 +270,13 @@ export function PriorityMessages() {
           </div>
         )}
       </CardContent>
+
+      {/* Message Details Dialog */}
+      <MessageDetailsDialog
+        messageId={selectedMessageId}
+        isOpen={isDialogOpen}
+        onClose={handleCloseDialog}
+      />
     </Card>
   );
 }

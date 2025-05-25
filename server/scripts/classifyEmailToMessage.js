@@ -87,7 +87,7 @@ Respond ONLY with a JSON object in this exact format:
                 throw new Error(`Invalid label: ${classification.label}`);
             }
 
-            console.log(`Email classified as: ${classification.label} - ${classification.reasoning}`);
+            // console.log(`Email classified as: ${classification.label} - ${classification.reasoning}`);
             return classification;
 
         } catch (parseError) {
