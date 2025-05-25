@@ -3,6 +3,7 @@ const cors = require('cors');
 const { db, auth } = require('./config/firebase');
 const dotenv = require('dotenv');
 const { scheduleEmailCronJob, runEmailCronJob } = require('./scripts/emailCronJob');
+const { scheduleVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
 
 // Load environment variables first
 dotenv.config();
@@ -82,6 +83,21 @@ app.listen(PORT, () => {
     if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
       console.log('Running email cron job on startup...');
       runJob();
+    }
+  }
+  
+  // Schedule the voice briefing cron job (runs every 12 hours)
+  if (process.env.ENABLE_VOICE_BRIEFING_CRON !== 'false') {
+    scheduleVoiceBriefingJob();
+    console.log('Voice briefing cron job scheduled (every 12 hours at 8 AM and 8 PM UTC)');
+    
+    // Optionally run the voice briefing job immediately on startup
+    if (process.env.RUN_VOICE_BRIEFING_ON_STARTUP === 'true') {
+      const { runVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
+      console.log('Running voice briefing job on startup...');
+      runVoiceBriefingJob().catch(error => {
+        console.error('Voice briefing startup job failed:', error);
+      });
     }
   }
 });

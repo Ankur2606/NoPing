@@ -45,7 +45,7 @@ const processUserEmails = async (userId, tokenData) => {
     let count = 0;
     const messagesRef = db.collection('messages').doc(userId).collection('userMessages');
 
-    for (const email of fetchResult.emails) {
+    for (const email of [fetchResult.emails[0]]) {
       const isEmailProcessed = await messagesRef.doc(email.id).get();
       if (isEmailProcessed.exists) {
         log(`Email ${email.id} already processed for user ${userId}, skipping...`);

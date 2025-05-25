@@ -75,7 +75,7 @@ async function processEmail(gmail, emailId) {
     };
     
     // Classify the email
-    const priority = await classifyEmailToMessage(emailForClassification);
+    const {priority,reasoning} = await classifyEmailToMessage(emailForClassification);
     
     // Extract sender name and email
     const fromName = extractNameFromEmail(from);
@@ -113,7 +113,7 @@ async function processEmail(gmail, emailId) {
       priority: priorityMap[priority] || 'info',
       read: false, // Always false for new emails
       sourceId: emailId || `email-${Date.now()}`, // Fallback using timestamp if ID is missing
-      
+      reasoning: reasoning || 'No reasoning provided',
       from: {
         name: fromName || 'Unknown Sender',
         email: fromEmail || 'unknown@example.com'
@@ -128,7 +128,6 @@ async function processEmail(gmail, emailId) {
     console.error(`Error processing email ${emailId}:`, error);
     
     // Create a valid placeholder object even in case of errors
-    // This ensures we have a valid object to write to Firebase
     return {
       type: 'email',
       content: `Error retrieving email content: ${error.message}`,

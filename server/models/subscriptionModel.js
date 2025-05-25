@@ -72,7 +72,7 @@ const subscriptionFeatureLimits = {
 const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") => {
   const now = new Date();
   let endDate = new Date();
-  
+
   if (tier === SUBSCRIPTION_TIERS.FREE) {
     // Free tier doesn't expire
     endDate = null;
@@ -80,13 +80,13 @@ const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") =>
     // Set end date to 30 days from now for monthly subscriptions
     endDate.setDate(now.getDate() + 30);
   }
-  
+
   return {
     ...baseSubscriptionStructure,
     userId,
     tier,
-    status: tier === SUBSCRIPTION_TIERS.FREE ? 
-      SUBSCRIPTION_STATUS.ACTIVE : 
+    status: tier === SUBSCRIPTION_TIERS.FREE ?
+      SUBSCRIPTION_STATUS.ACTIVE :
       paymentId ? SUBSCRIPTION_STATUS.ACTIVE : SUBSCRIPTION_STATUS.PENDING,
     startDate: now.toISOString(),
     endDate: endDate ? endDate.toISOString() : null,
@@ -102,18 +102,19 @@ const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") =>
 // Subscription pricing
 const subscriptionPricing = {
   [SUBSCRIPTION_TIERS.FREE]: {
-    [BILLING_PERIODS.MONTHLY]: 0.0009,
-    [BILLING_PERIODS.ANNUAL]: 0.0009
+    [BILLING_PERIODS.MONTHLY]: 0,               // Free
+    [BILLING_PERIODS.ANNUAL]: 0
   },
   [SUBSCRIPTION_TIERS.PRO]: {
-    [BILLING_PERIODS.MONTHLY]: 0.0009, // 0.05 BNB per month
-    [BILLING_PERIODS.ANNUAL]: 0.0009, // 0.5 BNB per year (save 16.7%)
+    [BILLING_PERIODS.MONTHLY]: 0.05,            // 0.05 BNB per month
+    [BILLING_PERIODS.ANNUAL]: 0.5               // 0.5 BNB per year (save ~16.7%)
   },
   [SUBSCRIPTION_TIERS.ENTERPRISE]: {
-    [BILLING_PERIODS.MONTHLY]: 0.0009, // 0.2 BNB per month
-    [BILLING_PERIODS.ANNUAL]: 0.0009, // 2 BNB per year (save 16.7%)
+    [BILLING_PERIODS.MONTHLY]: 0.2,             // 0.2 BNB per month
+    [BILLING_PERIODS.ANNUAL]: 2                 // 2 BNB per year (save ~16.7%)
   }
 };
+
 
 module.exports = {
   SUBSCRIPTION_TIERS,

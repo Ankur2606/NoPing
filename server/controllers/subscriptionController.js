@@ -42,7 +42,6 @@ const getCurrentSubscription = async (req, res) => {
     // Return existing subscription
     const subscriptionDoc = subscriptionsSnapshot.docs[0];
     const subscription = subscriptionDoc.data();
-    console.log('Subscription data:', subscription);
     // Check if subscription has expired
     const endDate = subscription.endDate ? new Date(subscription.endDate) : null;
     if (endDate && endDate < new Date() && subscription.tier !== SUBSCRIPTION_TIERS.FREE) {

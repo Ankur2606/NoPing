@@ -36,31 +36,32 @@ ${email.body.substring(0, 4000)} // Limiting to 4000 chars to avoid token limits
 `;
 
         // console.log(`Classifying email: "${email.subject.substring(0, 50)}${email.subject.length > 50 ? '...' : ''}"`);
-        
+
         const response = await client.chat.completions.create({
             model: "Qwen/Qwen2.5-32B-Instruct",
-            max_tokens: 10,
+            max_tokens: 100,
             temperature: 0,
             messages: [
                 {
                     role: "system",
                     content: `You're an expert email classifier for productivity workflows. Analyze each email and classify it strictly using ONLY these labels:
 
-FLOW_CRITICAL = Critical (Immediate action required, time-sensitive consequences)
-FLOW_ACTION = Action Needed (Requires follow-up but not urgent)
+FLOW_CRITICAL = Critical (Immediate action required, time-sensitive consequences)  
+FLOW_ACTION = Action Needed (Requires follow-up but not urgent)  
 FLOW_INFO = Informational (No action needed, FYI only)
 
-Consider these factors when classifying:
+Consider the following factors in your reasoning:
 - Urgency language ("urgent", "ASAP", "immediately", "by EOD")
-- Explicit deadlines mentioned in the email
+- Explicit deadlines mentioned
 - Sender's role/authority and relationship to recipient
 - Direct requests vs indirect FYI
 - Consequence of inaction or delayed response
-- Whether the email requires a response or is just informational
-- Presence of actionable items or requests
+- Whether the email requires a response
+- Presence of actionable items or tasks
 - Time-sensitivity of the subject matter
 
-Respond ONLY with one of these labels: FLOW_CRITICAL, FLOW_ACTION, or FLOW_INFO. Provide NO other text.`
+Respond ONLY with a JSON object in this exact format:
+{"label": "FLOW_CRITICAL|FLOW_ACTION|FLOW_INFO", "reasoning": "brief explanation"}`
                 },
                 {
                     role: "user",
@@ -69,21 +70,41 @@ Respond ONLY with one of these labels: FLOW_CRITICAL, FLOW_ACTION, or FLOW_INFO.
             ]
         });
 
-        // Extract and validate the classification result
-        const classification = response.choices[0].message.content.trim();
-        
-        // Validate that we got one of the expected classification labels
-        const validLabels = ['FLOW_CRITICAL', 'FLOW_ACTION', 'FLOW_INFO'];
-        if (!validLabels.includes(classification)) {
-            console.warn(`Unexpected classification result: ${classification}. Defaulting to FLOW_INFO.`);
-            return 'FLOW_INFO';
+        // Extract and parse the classification result
+        const rawResponse = response.choices[0].message.content.trim();
+        console.log(`Raw classification response: ${rawResponse}`);
+
+        try {
+            const classification = JSON.parse(rawResponse);
+            
+            // Validate that we got the expected structure
+            if (!classification.label || !classification.reasoning) {
+                throw new Error('Invalid response structure');
+            }
+
+            const validLabels = ['FLOW_CRITICAL', 'FLOW_ACTION', 'FLOW_INFO'];
+            if (!validLabels.includes(classification.label)) {
+                throw new Error(`Invalid label: ${classification.label}`);
+            }
+
+            console.log(`Email classified as: ${classification.label} - ${classification.reasoning}`);
+            return classification;
+
+        } catch (parseError) {
+            console.warn(`Failed to parse classification response: ${rawResponse}. Error: ${parseError.message}`);
+            // Default fallback
+            return {
+                label: 'FLOW_INFO',
+                reasoning: 'Classification failed, defaulted to informational'
+            };
         }
-        
-        return classification;
     } catch (error) {
         console.error('Email classification error:', error);
         // Default to FLOW_INFO for any errors to avoid blocking the pipeline
-        return 'FLOW_INFO';
+        return {
+                label: 'FLOW_INFO',
+                reasoning: 'Classification failed, defaulted to informational'
+            };
     }
 }
 

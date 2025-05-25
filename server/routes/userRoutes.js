@@ -10,8 +10,6 @@ const { db, admin } = require('../config/firebase');
 router.get('/profile', async (req, res) => {
   try {
     // Log the request user object to help debug
-    console.log('Request user object:', req.user);
-
     if (!req.user || !req.user.uid) {
       return res.status(401).json({ error: 'Authentication required' });
     }
