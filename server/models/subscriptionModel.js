@@ -36,6 +36,7 @@ const baseSubscriptionStructure = {
   cancelAtPeriodEnd: false, // Whether the subscription should cancel at the end of the current period
   paymentMethod: "", // bnb_direct, nowpayments
   lastPaymentId: "", // Reference to the last payment document
+  txnId: "", // Transaction ID for blockchain/payment transactions
   paymentHistory: [], // Array of payment document IDs
   metadata: {} // Additional metadata
 };
@@ -69,7 +70,7 @@ const subscriptionFeatureLimits = {
 };
 
 // Create a subscription object by tier
-const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") => {
+const createSubscription = (userId, tier, paymentMethod = "", paymentId = "", txnId = "") => {
   const now = new Date();
   let endDate = new Date();
 
@@ -94,6 +95,7 @@ const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") =>
     updatedAt: now.toISOString(),
     paymentMethod,
     lastPaymentId: paymentId,
+    txnId,
     paymentHistory: paymentId ? [paymentId] : [],
     autoRenew: tier !== SUBSCRIPTION_TIERS.FREE
   };
@@ -103,7 +105,7 @@ const createSubscription = (userId, tier, paymentMethod = "", paymentId = "") =>
 const subscriptionPricing = {
   [SUBSCRIPTION_TIERS.FREE]: {
     [BILLING_PERIODS.MONTHLY]: 0,               // Free
-    [BILLING_PERIODS.ANNUAL]: 0
+    [BILLING_PERIODS.ANNUAL]: 0.001
   },
   [SUBSCRIPTION_TIERS.PRO]: {
     [BILLING_PERIODS.MONTHLY]: 0.05,            // 0.05 BNB per month

@@ -4,7 +4,7 @@ const { db, auth } = require('./config/firebase');
 const dotenv = require('dotenv');
 const { scheduleEmailCronJob, runEmailCronJob } = require('./scripts/emailCronJob');
 const { scheduleVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
-
+const {startContractCronJob} = require('./scripts/contractCron');
 // Load environment variables first
 dotenv.config();
 
@@ -100,6 +100,9 @@ app.listen(PORT, () => {
       });
     }
   }
+
+  startContractCronJob()
+
 });
 
 module.exports = app;

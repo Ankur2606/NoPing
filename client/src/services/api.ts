@@ -346,6 +346,7 @@ export const subscriptionApi = {
     tier: string;
     billingPeriod: string;
     paymentMethod?: string;
+    txnid: string;
   }) => apiRequest('/subscriptions/start', {
     method: 'POST',
     body: JSON.stringify(data)
@@ -361,6 +362,7 @@ export const subscriptionApi = {
     tier: string;
     billingPeriod: string;
     paymentMethod?: string;
+    txnid: string;
   }) => apiRequest('/subscriptions/change-tier', {
     method: 'POST',
     body: JSON.stringify(data)

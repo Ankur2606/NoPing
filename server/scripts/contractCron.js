@@ -2,7 +2,7 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 const { db } = require("../config/firebase");
 const admin = require("firebase-admin");
-// const cron = require("node-cron");
+const cron = require("node-cron");
 
 // Contract ABI - minimal needed for bulkSaveClassifications
 const ABI = [
@@ -92,7 +92,7 @@ async function insertMessages() {
     }
 }
 
-const startCronJob = async () => {
+const startContractCronJob = async () => {
     try {
         console.log("Starting cron job to insert messages...");
         cron.schedule("0 0 * * *", () => {
@@ -108,5 +108,5 @@ const startCronJob = async () => {
 
 module.exports = {
     insertMessages,
-    startCronJob
+    startContractCronJob
 };

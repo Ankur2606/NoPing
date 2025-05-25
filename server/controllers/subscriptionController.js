@@ -97,7 +97,7 @@ const getCurrentSubscription = async (req, res) => {
 const startSubscription = async (req, res) => {
   try {
     const { uid } = req.user;
-    const { tier, billingPeriod = BILLING_PERIODS.MONTHLY, paymentMethod = 'bnb_direct' } = req.body;
+    const { tier, billingPeriod = BILLING_PERIODS.MONTHLY, paymentMethod = 'bnb_direct', txnId = '' } = req.body;
     
     if (!tier || !Object.values(SUBSCRIPTION_TIERS).includes(tier)) {
       return res.status(400).json({
@@ -130,10 +130,9 @@ const startSubscription = async (req, res) => {
     }
     
     // For paid tiers, create a pending subscription
-    const pendingSubscription = createSubscription(uid, tier);
+    const pendingSubscription = createSubscription(uid, tier, paymentMethod, '', txnId);
     pendingSubscription.status = SUBSCRIPTION_STATUS.PENDING;
     pendingSubscription.billingPeriod = billingPeriod;
-    pendingSubscription.paymentMethod = paymentMethod;
     
     const subscriptionRef = await db.collection('subscriptions').add(pendingSubscription);
     
@@ -152,6 +151,81 @@ const startSubscription = async (req, res) => {
     });
   } catch (error) {
     console.error('Error starting subscription:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Confirm payment and activate subscription
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const confirmPayment = async (req, res) => {
+  try {
+    const { uid } = req.user;
+    const { subscriptionId } = req.params;
+    const { txnId, paymentId } = req.body;
+    
+    if (!txnId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction ID is required'
+      });
+    }
+    
+    // Get the subscription
+    const subscriptionRef = db.collection('subscriptions').doc(subscriptionId);
+    const subscriptionDoc = await subscriptionRef.get();
+    
+    if (!subscriptionDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Subscription not found'
+      });
+    }
+    
+    const subscription = subscriptionDoc.data();
+    
+    // Ensure the subscription belongs to the requesting user
+    if (subscription.userId !== uid) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+    
+    // Update subscription with payment confirmation
+    const updates = {
+      status: SUBSCRIPTION_STATUS.ACTIVE,
+      txnId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    if (paymentId) {
+      updates.lastPaymentId = paymentId;
+      updates.paymentHistory = admin.firestore.FieldValue.arrayUnion(paymentId);
+    }
+    
+    await subscriptionRef.update(updates);
+    
+    // Get updated subscription
+    const updatedSubscriptionDoc = await subscriptionRef.get();
+    const updatedSubscription = updatedSubscriptionDoc.data();
+    
+    return res.status(200).json({
+      success: true,
+      subscription: {
+        id: subscriptionDoc.id,
+        ...updatedSubscription,
+        features: subscriptionFeatureLimits[updatedSubscription.tier]
+      },
+      message: 'Payment confirmed and subscription activated'
+    });
+  } catch (error) {
+    console.error('Error confirming payment:', error);
     return res.status(500).json({
       success: false,
       error: error.message
@@ -483,6 +557,7 @@ const getSubscriptionPlans = async (req, res) => {
 module.exports = {
   getCurrentSubscription,
   startSubscription,
+  confirmPayment,
   cancelSubscription,
   changeSubscriptionTier,
   getSubscriptionHistory,
