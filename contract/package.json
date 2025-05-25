@@ -5,7 +5,9 @@
     "test": "npx hardhat test",
     "deploy-local": "npx hardhat run scripts/deploy.js --network localhost",
     "deploy-testnet": "npx hardhat run scripts/deploy.js --network bnbTestnet",
-    "deploy-mainnet": "npx hardhat run scripts/deploy.js --network bnbMainnet"
+    "deploy-mainnet": "npx hardhat run scripts/deploy.js --network bnbMainnet",
+    "deploy-opbnb-testnet": "npx hardhat run scripts/deploy.js --network opbnbTestnet",
+    "deploy-opbnb-mainnet": "npx hardhat run scripts/deploy.js --network opbnbMainnet"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",

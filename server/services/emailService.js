@@ -141,7 +141,6 @@ const saveEmailsToFirestore = async (userId, emailResults, tasksResults) => {
             };
         }
 
-        console.log(`Saving tasks`, tasksResults);
         const batchTasks = db.batch();
         const TasksRef = db.collection('tasks').doc(userId).collection('userTasks');
         let TasksSavedCount = 0;

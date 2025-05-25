@@ -86,22 +86,22 @@ const SubscriptionPage = () => {
   // Handle payment success
   const handlePaymentSuccess = async (paymentData) => {
     try {
-      // Start or update subscription with the payment data
-const endpoint = `${import.meta.env.VITE_API_BASE_URL}${currentSubscription ? '/subscriptions/change-tier' : '/subscriptions/start'}`;
-      const response = await axios.post(endpoint, {
-        tier: selectedPlan.tier,
-        billingPeriod: selectedPlan.period.toUpperCase(),
-        paymentId: paymentData.paymentId
-      });
+      const apiFunction =currentSubscription ? subscriptionApi.changeTier:subscriptionApi.startSubscription;
+      console.log("Payment Data:", paymentData);
+      // const response = await apiFunction({
+      //   tier: selectedPlan.tier.toLowerCase(),
+      //   billingPeriod: selectedPlan.period.toUpperCase(),
+      //   txnid: paymentData.txnhash,
+      // })
       
       toast({
         title: "Subscription Updated",
         description: "Your subscription has been successfully updated.",
         variant: "default",
       });
-      
+      // console.log("Subscription updated successfully:", response);
       // Refresh subscription data
-      setCurrentSubscription(response.data);
+      // setCurrentSubscription(response.data);
       
       // Move to subscription tab
       setActiveTab("subscription");

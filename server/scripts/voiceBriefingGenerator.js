@@ -33,6 +33,11 @@ async function generateVoiceBriefing(emails, options = {}) {
             fileName: `briefing_${Date.now()}.mp3`,
             maxEmails: 5,
             voice: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM', // Default to Rachel voice
+            voiceSettings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                speed: 1.2 // Maximum allowed speed by ElevenLabs API (1.0-1.2 range)
+            },
             ...options
         };
 
@@ -303,8 +308,9 @@ async function generateAudio(text, config) {
         text: text,
         model_id: 'eleven_multilingual_v2',
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
+          stability: config.voiceSettings.stability,
+          similarity_boost: config.voiceSettings.similarity_boost,
+          speed: config.voiceSettings.speed
         }
       },
       responseType: 'arraybuffer'

@@ -13,6 +13,9 @@ router.post('/start', authenticateUser, subscriptionController.startSubscription
 // Cancel an existing subscription
 router.post('/cancel', authenticateUser, subscriptionController.cancelSubscription);
 
+// Update subscription with transaction ID after payment
+router.patch('/:subscriptionId/confirm-payment', authenticateUser, subscriptionController.confirmPayment);
+
 // Change subscription tier
 router.post('/change-tier', authenticateUser, subscriptionController.changeSubscriptionTier);
 

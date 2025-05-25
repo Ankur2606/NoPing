@@ -8,6 +8,7 @@ const baseMessageStructure = {
   content: "",
   timestamp: null, // Will be set to admin.firestore.FieldValue.serverTimestamp()
   priority: "info", // "critical" | "action" | "info"
+  reasoning: "", // Reasoning for the message, if applicable
   read: false,
   sourceId: "",
   messageTimestamp: null, // Timestamp of the original message

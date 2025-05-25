@@ -20,7 +20,7 @@ class TelegramService {
     }
 
     // Create a bot instance
-    this.bot = new TelegramBot(process.env.TELEGRAM_BOT_API_KEY, { polling: false });
+    this.bot = new TelegramBot(process.env.TELEGRAM_BOT_API_KEY, { polling: true });
     this.setupCommandHandlers();
     console.log('Telegram bot service initialized');
   }
