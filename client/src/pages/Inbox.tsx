@@ -113,13 +113,42 @@ const cleanHtmlEntities = (content: string): string => {
   return cleaned;
 };
 
-// Helper function to format URLs and make them clickable
+// Helper function to format URLs and make them clickable, and render images
 const formatUrls = (content: string): string => {
-  // Replace URLs with clickable links
+  // Image extensions to detect
+  const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?[^\s]*)?$/i;
+  
+  // Replace URLs with clickable links or images
   const urlRegex = /(https?:\/\/[^\s\)]+)/g;
   return content.replace(urlRegex, (url) => {
     // Clean up URL (remove trailing punctuation)
     const cleanUrl = url.replace(/[.,;:!?]+$/, '');
+    
+    // Check if URL is an image
+    if (imageExtensions.test(cleanUrl)) {
+      return `
+        <div class="my-2">
+          <img 
+            src="${cleanUrl}" 
+            alt="Image" 
+            class="max-w-full h-auto rounded-md shadow-sm cursor-pointer hover:shadow-md transition-shadow" 
+            style="max-height: 400px; object-fit: contain;"
+            onclick="window.open('${cleanUrl}', '_blank')"
+            onError="this.style.display='none'; this.nextElementSibling.style.display='inline';"
+          />
+          <a 
+            href="${cleanUrl}" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            class="text-blue-600 hover:underline hidden"
+          >
+            ${cleanUrl}
+          </a>
+        </div>
+      `;
+    }
+    
+    // Regular URL link
     return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${cleanUrl}</a>`;
   });
 };
@@ -150,9 +179,8 @@ const parseMarkdownToHtml = (content: string): string => {
   
   // Links
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  
-  // Images
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto;" />');
+    // Images
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<div class="my-2"><img src="$2" alt="$1" class="max-w-full h-auto rounded-md shadow-sm" style="max-height: 400px; object-fit: contain;" /></div>');
   
   // Blockquotes
   html = html.replace(/^>\s+(.*)$/gm, '<blockquote>$1</blockquote>');
