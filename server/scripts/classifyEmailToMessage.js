@@ -72,7 +72,7 @@ Respond ONLY with a JSON object in this exact format:
 
         // Extract and parse the classification result
         const rawResponse = response.choices[0].message.content.trim();
-        console.log(`Raw classification response: ${rawResponse}`);
+        // console.log(`Raw classification response: ${rawResponse}`);
 
         try {
             const classification = JSON.parse(rawResponse);
@@ -87,8 +87,11 @@ Respond ONLY with a JSON object in this exact format:
                 throw new Error(`Invalid label: ${classification.label}`);
             }
 
-            // console.log(`Email classified as: ${classification.label} - ${classification.reasoning}`);
-            return classification;
+            // console.log(`ppppp Email classified as: ${classification.label} - ${classification.reasoning}`);
+            return {
+                label: classification.label,
+                reasoning: classification.reasoning
+            };
 
         } catch (parseError) {
             console.warn(`Failed to parse classification response: ${rawResponse}. Error: ${parseError.message}`);
