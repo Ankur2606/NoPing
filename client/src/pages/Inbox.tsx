@@ -45,12 +45,176 @@ const isHtmlContent = (content: string): boolean => {
   return /<[a-z][\s\S]*>/i.test(content);
 };
 
-// Helper function to safely render HTML content
+// Helper function to check if content needs HTML entity cleanup
+const needsHtmlEntityCleanup = (content: string): boolean => {
+  return /&[a-zA-Z]+;|&nbsp;|&zwnj;|&zwsp;/.test(content);
+};
+
+// Helper function to check if content is Markdown
+const isMarkdownContent = (content: string): boolean => {
+  // Check for common markdown patterns
+  const markdownPatterns = [
+    /^#{1,6}\s+/m,           // Headers (#, ##, ###, etc.)
+    /\*\*.*?\*\*/,           // Bold text
+    /\*.*?\*/,               // Italic text
+    /`.*?`/,                 // Inline code
+    /```[\s\S]*?```/,        // Code blocks
+    /^\s*[-*+]\s+/m,         // Unordered lists
+    /^\s*\d+\.\s+/m,         // Ordered lists
+    /\[.*?\]\(.*?\)/,        // Links
+    /!\[.*?\]\(.*?\)/,       // Images
+    /^\s*>\s+/m,             // Blockquotes
+    /^\s*\|.*\|.*\|/m,       // Tables
+    /^---+$/m,               // Horizontal rules
+    /~~.*?~~/,               // Strikethrough
+  ];
+  
+  return markdownPatterns.some(pattern => pattern.test(content));
+};
+
+// Helper function to clean HTML entities and format text content
+const cleanHtmlEntities = (content: string): string => {
+  let cleaned = content;
+    // Common HTML entities
+  const entities = {
+    '&nbsp;': ' ',
+    '&zwnj;': '',
+    '&zwsp;': '',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&apos;': "'",
+    '&copy;': '©',
+    '&reg;': '®',
+    '&trade;': '™',
+    '&hellip;': '...',
+    '&ndash;': '–',
+    '&mdash;': '—',
+    '&lsquo;': "'",
+    '&rsquo;': "'",
+    '&ldquo;': '"',
+    '&rdquo;': '"'
+  };
+  
+  // Replace HTML entities
+  Object.entries(entities).forEach(([entity, replacement]) => {
+    cleaned = cleaned.replace(new RegExp(entity, 'g'), replacement);
+  });
+  
+  // Clean up excessive whitespace and line breaks
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // Add line breaks for better readability
+  cleaned = cleaned.replace(/(\. )([A-Z])/g, '$1\n\n$2'); // Add breaks after sentences
+  cleaned = cleaned.replace(/(Apply now|Today|Internship)(\s+)/g, '$1\n\n'); // Break after common patterns
+  cleaned = cleaned.replace(/(\d+\s*days?\s*ago|\d+\s*weeks?\s*ago|Today)(\s+)/g, '$1\n');
+  
+  return cleaned;
+};
+
+// Helper function to format URLs and make them clickable
+const formatUrls = (content: string): string => {
+  // Replace URLs with clickable links
+  const urlRegex = /(https?:\/\/[^\s\)]+)/g;
+  return content.replace(urlRegex, (url) => {
+    // Clean up URL (remove trailing punctuation)
+    const cleanUrl = url.replace(/[.,;:!?]+$/, '');
+    return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${cleanUrl}</a>`;
+  });
+};
+const parseMarkdownToHtml = (content: string): string => {
+  let html = content;
+  
+  // Headers
+  html = html.replace(/^#{6}\s+(.*)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^#{5}\s+(.*)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^#{4}\s+(.*)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^#{3}\s+(.*)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^#{2}\s+(.*)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^#{1}\s+(.*)$/gm, '<h1>$1</h1>');
+  
+  // Bold and italic
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  
+  // Strikethrough
+  html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+  
+  // Code blocks
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  
+  // Images
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto;" />');
+  
+  // Blockquotes
+  html = html.replace(/^>\s+(.*)$/gm, '<blockquote>$1</blockquote>');
+  
+  // Horizontal rules
+  html = html.replace(/^---+$/gm, '<hr />');
+  
+  // Line breaks
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = html.replace(/\n/g, '<br />');
+  
+  // Unordered lists
+  html = html.replace(/^\s*[-*+]\s+(.*)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  
+  // Ordered lists
+  html = html.replace(/^\s*\d+\.\s+(.*)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
+  
+  // Basic table support
+  html = html.replace(/^\|(.+)\|$/gm, (match, content) => {
+    const cells = content.split('|').map(cell => cell.trim());
+    const cellsHtml = cells.map(cell => `<td>${cell}</td>`).join('');
+    return `<tr>${cellsHtml}</tr>`;
+  });
+  html = html.replace(/(<tr>.*<\/tr>)/s, '<table class="border-collapse border border-gray-300">$1</table>');
+  
+  // Wrap in paragraph if no block elements
+  if (!html.includes('<h') && !html.includes('<p') && !html.includes('<ul') && !html.includes('<ol') && !html.includes('<blockquote') && !html.includes('<pre')) {
+    html = `<p>${html}</p>`;
+  }
+  
+  return html;
+};
+
+// Helper function to safely render content (HTML, Markdown, or plain text)
 const renderMessageContent = (content: string) => {
   if (isHtmlContent(content)) {
     return <div dangerouslySetInnerHTML={{ __html: content }} />;
+  } else if (isMarkdownContent(content)) {
+    const htmlContent = parseMarkdownToHtml(content);
+    return <div dangerouslySetInnerHTML={{ __html: htmlContent }} className="markdown-content" />;
+  } else if (needsHtmlEntityCleanup(content)) {
+    // Clean HTML entities and format URLs for plain text with entities
+    const cleanedContent = cleanHtmlEntities(content);
+    const formattedContent = formatUrls(cleanedContent);
+    return (
+      <div 
+        className="whitespace-pre-wrap" 
+        dangerouslySetInnerHTML={{ __html: formattedContent }}
+      />
+    );
   }
-  return <p>{content}</p>;
+  
+  // Regular plain text
+  const formattedContent = formatUrls(content);
+  return (
+    <div 
+      className="whitespace-pre-wrap" 
+      dangerouslySetInnerHTML={{ __html: formattedContent }}
+    />
+  );
 };
 
 const Inbox = () => {
