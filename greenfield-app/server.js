@@ -7,7 +7,7 @@ const port = 3000;
 
 const RPC_URL = 'https://gnfd-testnet-fullnode-tendermint-ap.bnbchain.org';
 const CHAIN_ID = '5600';
-const PRIVATE_KEY = 'a42c4cdd5730119ada581bdb01139bbb86e0e51fd789fb922f48762d3df29056'; // Replace with your private key
+const PRIVATE_KEY = ''; // Replace with your private key
 const BUCKET_NAME = 'bookit'; // Replace with your bucket name
 const OBJECT_NAME = 'voice.mp3';
 
