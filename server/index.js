@@ -4,7 +4,7 @@ const { db, auth } = require('./config/firebase');
 const dotenv = require('dotenv');
 const { scheduleEmailCronJob, runEmailCronJob } = require('./scripts/emailCronJob');
 const { scheduleVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
-const {startContractCronJob} = require('./scripts/contractCron');
+const {startContractCronJob, insertMessages} = require('./scripts/contractCron');
 // Load environment variables first
 dotenv.config();
 
@@ -62,46 +62,47 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   
   // Initialize Telegram bot (if API key is set)
-  if (process.env.TELEGRAM_BOT_API_KEY) {
-    console.log('Telegram bot service available at:');
-    console.log(`- Bot verification endpoint: http://localhost:${PORT}/api/telegram/bot-verify`);
+  // if (process.env.TELEGRAM_BOT_API_KEY) {
+  //   console.log('Telegram bot service available at:');
+  //   console.log(`- Bot verification endpoint: http://localhost:${PORT}/api/telegram/bot-verify`);
     
-    if (telegramService.bot) {
-      console.log(`- Bot username: @${telegramService.bot.options.username || 'Unknown'}`);
-    } else {
-      console.log('- Bot initialization failed. Check your TELEGRAM_BOT_API_KEY.');
-    }
-  } else {
-    console.log('Telegram bot service disabled (TELEGRAM_BOT_API_KEY not set)');
-  }
+  //   if (telegramService.bot) {
+  //     console.log(`- Bot username: @${telegramService.bot.options.username || 'Unknown'}`);
+  //   } else {
+  //     console.log('- Bot initialization failed. Check your TELEGRAM_BOT_API_KEY.');
+  //   }
+  // } else {
+  //   console.log('Telegram bot service disabled (TELEGRAM_BOT_API_KEY not set)');
+  // }
   
-  // Schedule the email cron job (runs every hour by default)
-  if (process.env.ENABLE_EMAIL_CRON !== 'false') {
-    const runJob = scheduleEmailCronJob();
+  // // Schedule the email cron job (runs every hour by default)
+  // if (process.env.ENABLE_EMAIL_CRON !== 'false') {
+  //   const runJob = scheduleEmailCronJob();
     
-    // Optionally run the job immediately on startup
-    if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
-      console.log('Running email cron job on startup...');
-      runJob();
-    }
-  }
+  //   // Optionally run the job immediately on startup
+  //   if (process.env.RUN_EMAIL_CRON_ON_STARTUP === 'true') {
+  //     console.log('Running email cron job on startup...');
+  //     runJob();
+  //   }
+  // }
   
-  // Schedule the voice briefing cron job (runs every 12 hours)
-  if (process.env.ENABLE_VOICE_BRIEFING_CRON !== 'false') {
-    scheduleVoiceBriefingJob();
-    console.log('Voice briefing cron job scheduled (every 12 hours at 8 AM and 8 PM UTC)');
+  // // Schedule the voice briefing cron job (runs every 12 hours)
+  // if (process.env.ENABLE_VOICE_BRIEFING_CRON !== 'false') {
+  //   scheduleVoiceBriefingJob();
+  //   console.log('Voice briefing cron job scheduled (every 12 hours at 8 AM and 8 PM UTC)');
     
-    // Optionally run the voice briefing job immediately on startup
-    if (process.env.RUN_VOICE_BRIEFING_ON_STARTUP === 'true') {
-      const { runVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
-      console.log('Running voice briefing job on startup...');
-      runVoiceBriefingJob().catch(error => {
-        console.error('Voice briefing startup job failed:', error);
-      });
-    }
-  }
+  //   // Optionally run the voice briefing job immediately on startup
+  //   if (process.env.RUN_VOICE_BRIEFING_ON_STARTUP === 'true') {
+  //     const { runVoiceBriefingJob } = require('./scripts/voiceBriefingCronJob');
+  //     console.log('Running voice briefing job on startup...');
+  //     runVoiceBriefingJob().catch(error => {
+  //       console.error('Voice briefing startup job failed:', error);
+  //     });
+  //   }
+  // }
 
-  startContractCronJob()
+  // startContractCronJob()
+  // insertMessages()
 
 });
 

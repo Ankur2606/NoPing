@@ -7,6 +7,7 @@ export interface BaseMessage {
   timestamp: any;
   priority?: "critical" | "action" | "info";
   read?: boolean;
+  reasoning?: string;
 }
 
 export interface EmailMessage extends BaseMessage {
